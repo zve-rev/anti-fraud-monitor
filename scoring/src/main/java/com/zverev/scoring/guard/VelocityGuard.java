@@ -3,6 +3,7 @@ package com.zverev.scoring.guard;
 import com.zverev.entity.Transaction;
 import com.zverev.entity.enums.AlertSeverity;
 import com.zverev.entity.enums.Rule;
+import com.zverev.scoring.dto.GuardViolation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
@@ -14,15 +15,15 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class VelocityGuard implements Guard {
 
+    private static final String REDIS_KEY_PREFIX = "velocity:card:";
     private static final Duration WINDOW = Duration.ofMinutes(5);
     private static final int MAX_IN_WINDOW = 5;
-    private static final String KEY_PREFIX = "velocity:card:";
 
     private final StringRedisTemplate stringRedisTemplate;
 
     @Override
     public Optional<GuardViolation> evaluate(Transaction transaction) {
-        String key = KEY_PREFIX + transaction.getCardToken();
+        String key = REDIS_KEY_PREFIX + transaction.getCardToken();
 
         Long currentCount = stringRedisTemplate.opsForValue().increment(key);
 

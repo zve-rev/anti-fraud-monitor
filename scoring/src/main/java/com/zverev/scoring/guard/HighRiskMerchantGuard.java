@@ -3,6 +3,7 @@ package com.zverev.scoring.guard;
 import com.zverev.entity.Transaction;
 import com.zverev.entity.enums.AlertSeverity;
 import com.zverev.entity.enums.Rule;
+import com.zverev.scoring.dto.GuardViolation;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;

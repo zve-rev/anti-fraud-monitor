@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/alerts")
+@RequestMapping("api/v1/alerts")
 public class AlertController {
 
     private final AlertQueryService alertQueryService;
@@ -19,7 +19,7 @@ public class AlertController {
     }
 
     @GetMapping
-    public List<AlertResponse> findAll() {
+    public List<AlertResponse> listAllAlerts() {
         return alertQueryService.findAllAlerts();
     }
 }

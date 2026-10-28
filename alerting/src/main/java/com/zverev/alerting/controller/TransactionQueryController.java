@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/transactions")
+@RequestMapping("api/v1/transactions")
 public class TransactionQueryController {
 
     private final TransactionQueryService transactionQueryService;
@@ -19,7 +19,7 @@ public class TransactionQueryController {
     }
 
     @GetMapping
-    public List<TransactionResponse> findAll() {
+    public List<TransactionResponse> listAllTransactions() {
         return transactionQueryService.findAllTransactions();
     }
 }

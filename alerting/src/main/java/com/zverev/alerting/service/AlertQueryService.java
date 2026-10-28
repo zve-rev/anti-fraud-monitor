@@ -18,7 +18,8 @@ public class AlertQueryService {
 
     @Transactional(readOnly = true)
     public List<AlertResponse> findAllAlerts() {
-        return alertRepository.findAll().stream()
+        return alertRepository.findAll()
+                .stream()
                 .map(AlertResponse::toAlertResponse)
                 .toList();
     }

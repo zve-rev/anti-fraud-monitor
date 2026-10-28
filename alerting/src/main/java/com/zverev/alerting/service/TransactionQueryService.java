@@ -7,6 +7,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+import static com.zverev.alerting.dto.TransactionResponse.toTransactionResponse;
+
 @Service
 public class TransactionQueryService {
 
@@ -18,8 +20,13 @@ public class TransactionQueryService {
 
     @Transactional(readOnly = true)
     public List<TransactionResponse> findAllTransactions() {
-        return transactionRepository.findAll().stream()
-                .map(tx -> TransactionResponse.toTransactionResponse(tx, maskCard(tx.getCardToken())))
+        return transactionRepository.findAll()
+                .stream()
+                .map(transaction -> {
+                    String cardToken = transaction.getCardToken();
+                    String cardTokenMasked = maskCard(cardToken);
+                    return toTransactionResponse(transaction, cardTokenMasked);
+                })
                 .toList();
     }
 

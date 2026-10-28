@@ -1,4 +1,4 @@
-package com.zverev.scoring.guard;
+package com.zverev.scoring.dto;
 
 import com.zverev.entity.enums.AlertSeverity;
 

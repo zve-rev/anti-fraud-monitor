@@ -19,7 +19,7 @@ import java.util.UUID;
 public class TransactionService {
 
     private final TransactionRepository transactionRepository;
-    private final TransactionEventProducer eventProducer;
+    private final TransactionEventProducer transactionEventProducer;
 
     @Transactional
     public TransactionCreatedResponse process(TransactionRequest request) {
@@ -42,7 +42,7 @@ public class TransactionService {
 
         Transaction saved = transactionRepository.save(transaction);
 
-        eventProducer.send(
+        transactionEventProducer.send(
                 new TransactionEvent(
                         saved.getExternalId(),
                         saved.getCardToken(),

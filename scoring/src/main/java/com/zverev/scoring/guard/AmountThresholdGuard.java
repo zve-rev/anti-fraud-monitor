@@ -4,6 +4,7 @@ import com.zverev.entity.Transaction;
 import com.zverev.entity.enums.AlertSeverity;
 import com.zverev.entity.enums.CurrencyCode;
 import com.zverev.entity.enums.Rule;
+import com.zverev.scoring.dto.GuardViolation;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
