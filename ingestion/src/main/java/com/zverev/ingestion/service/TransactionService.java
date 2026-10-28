@@ -4,9 +4,10 @@ import com.zverev.dto.TransactionEvent;
 import com.zverev.entity.Transaction;
 import com.zverev.ingestion.dto.TransactionCreatedResponse;
 import com.zverev.ingestion.dto.TransactionRequest;
-import com.zverev.ingestion.exception.DuplicateTransactionException;
+import com.zverev.ingestion.exception.TransactionAlreadyExistsException;
 import com.zverev.ingestion.kafka.TransactionEventProducer;
 import com.zverev.repository.TransactionRepository;
+import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,23 +15,18 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Service
+@AllArgsConstructor
 public class TransactionService {
 
     private final TransactionRepository transactionRepository;
     private final TransactionEventProducer eventProducer;
-
-    public TransactionService(TransactionRepository transactionRepository,
-                              TransactionEventProducer eventProducer) {
-        this.transactionRepository = transactionRepository;
-        this.eventProducer = eventProducer;
-    }
 
     @Transactional
     public TransactionCreatedResponse process(TransactionRequest request) {
         UUID externalId = request.externalId();
 
         if (transactionRepository.existsByExternalId(externalId)) {
-            throw new DuplicateTransactionException(externalId);
+            throw new TransactionAlreadyExistsException(externalId);
         }
 
         Transaction transaction = Transaction.builder()

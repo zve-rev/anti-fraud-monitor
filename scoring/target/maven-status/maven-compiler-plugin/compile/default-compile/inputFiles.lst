@@ -1,7 +1,0 @@
-C:\Users\paulz\Desktop\anti-fraud-monitor\scoring\src\main\java\com\zverev\scoring\guard\AmountThresholdGuard.java
-C:\Users\paulz\Desktop\anti-fraud-monitor\scoring\src\main\java\com\zverev\scoring\guard\Guard.java
-C:\Users\paulz\Desktop\anti-fraud-monitor\scoring\src\main\java\com\zverev\scoring\guard\GuardViolation.java
-C:\Users\paulz\Desktop\anti-fraud-monitor\scoring\src\main\java\com\zverev\scoring\guard\HighRiskMerchantGuard.java
-C:\Users\paulz\Desktop\anti-fraud-monitor\scoring\src\main\java\com\zverev\scoring\guard\VelocityGuard.java
-C:\Users\paulz\Desktop\anti-fraud-monitor\scoring\src\main\java\com\zverev\scoring\kafka\TransactionEventConsumer.java
-C:\Users\paulz\Desktop\anti-fraud-monitor\scoring\src\main\java\com\zverev\scoring\ScoringApplication.java

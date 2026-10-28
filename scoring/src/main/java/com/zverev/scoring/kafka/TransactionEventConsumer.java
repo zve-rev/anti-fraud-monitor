@@ -30,7 +30,6 @@ public class TransactionEventConsumer {
     private final StringRedisTemplate redis;
 
     @RetryableTopic(
-            attempts = "3",
             backOff = @BackOff(delay = 2000, multiplier = 2.0)
     )
     @KafkaListener(topics = "transactions.raw", groupId = "antifraud-group")
@@ -52,17 +51,15 @@ public class TransactionEventConsumer {
                 .orElseThrow(() -> new IllegalStateException(
                         "Transaction not found: " + event.externalId()));
 
-        for (Guard guard : guards) {
-            guard.evaluate(transaction).ifPresent(violation -> {
-                Alert alert = new Alert(
-                        guard.getRule(),
-                        violation.severity(),
-                        violation.message(),
-                        Instant.now()
-                );
-                transaction.addAlert(alert);
-            });
-        }
+        guards.forEach(guard -> guard.evaluate(transaction).ifPresent(violation -> {
+            Alert alert = new Alert(
+                    guard.getRule(),
+                    violation.severity(),
+                    violation.message(),
+                    Instant.now()
+            );
+            transaction.addAlert(alert);
+        }));
 
         transaction.setStatus(decideStatus(transaction.getAlerts()));
 

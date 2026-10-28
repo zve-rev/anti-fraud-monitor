@@ -12,9 +12,9 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(DuplicateTransactionException.class)
+    @ExceptionHandler(TransactionAlreadyExistsException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
-    public Map<String, String> handleDuplicate(DuplicateTransactionException ex) {
+    public Map<String, String> handleDuplicate(TransactionAlreadyExistsException ex) {
         return Map.of(
                 "error", "duplicate_transaction",
                 "message", ex.getMessage(),

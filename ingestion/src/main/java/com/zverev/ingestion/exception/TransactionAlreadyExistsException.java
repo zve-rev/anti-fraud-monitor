@@ -4,12 +4,12 @@ import lombok.Getter;
 
 import java.util.UUID;
 
-public class DuplicateTransactionException extends RuntimeException {
+public class TransactionAlreadyExistsException extends RuntimeException {
 
     @Getter
     private final UUID externalId;
 
-    public DuplicateTransactionException(UUID externalId) {
+    public TransactionAlreadyExistsException(UUID externalId) {
         super(String.format("Transaction with externalId %s already exists", externalId));
         this.externalId = externalId;
     }

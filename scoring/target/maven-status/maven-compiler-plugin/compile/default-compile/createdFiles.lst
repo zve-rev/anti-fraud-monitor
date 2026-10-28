@@ -1,7 +1,0 @@
-com\zverev\scoring\guard\AmountThresholdGuard.class
-com\zverev\scoring\kafka\TransactionEventConsumer.class
-com\zverev\scoring\guard\GuardViolation.class
-com\zverev\scoring\guard\Guard.class
-com\zverev\scoring\ScoringApplication.class
-com\zverev\scoring\guard\VelocityGuard.class
-com\zverev\scoring\guard\HighRiskMerchantGuard.class

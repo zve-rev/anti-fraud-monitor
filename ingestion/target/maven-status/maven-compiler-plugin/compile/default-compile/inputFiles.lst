@@ -1,8 +1,0 @@
-C:\Users\paulz\Desktop\anti-fraud-monitor\ingestion\src\main\java\com\zverev\ingestion\controller\TransactionController.java
-C:\Users\paulz\Desktop\anti-fraud-monitor\ingestion\src\main\java\com\zverev\ingestion\dto\TransactionCreatedResponse.java
-C:\Users\paulz\Desktop\anti-fraud-monitor\ingestion\src\main\java\com\zverev\ingestion\dto\TransactionRequest.java
-C:\Users\paulz\Desktop\anti-fraud-monitor\ingestion\src\main\java\com\zverev\ingestion\exception\DuplicateTransactionException.java
-C:\Users\paulz\Desktop\anti-fraud-monitor\ingestion\src\main\java\com\zverev\ingestion\exception\GlobalExceptionHandler.java
-C:\Users\paulz\Desktop\anti-fraud-monitor\ingestion\src\main\java\com\zverev\ingestion\IngestionApplication.java
-C:\Users\paulz\Desktop\anti-fraud-monitor\ingestion\src\main\java\com\zverev\ingestion\kafka\TransactionEventProducer.java
-C:\Users\paulz\Desktop\anti-fraud-monitor\ingestion\src\main\java\com\zverev\ingestion\service\TransactionService.java

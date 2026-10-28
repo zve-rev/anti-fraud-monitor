@@ -1,7 +1,0 @@
-com\zverev\alerting\dto\TransactionResponse.class
-com\zverev\alerting\dto\AlertResponse.class
-com\zverev\alerting\controller\AlertController.class
-com\zverev\alerting\service\AlertQueryService.class
-com\zverev\alerting\service\TransactionQueryService.class
-com\zverev\alerting\AlertingApplication.class
-com\zverev\alerting\controller\TransactionQueryController.class
