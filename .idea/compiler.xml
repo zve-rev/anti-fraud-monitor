@@ -7,13 +7,28 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
-        <module name="anti-fraud-monitor" />
+      </profile>
+      <profile name="Annotation profile for anti-fraud-monitor" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="false">
+          <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.48/lombok-1.18.48.jar" />
+        </processorPath>
+        <module name="scoring" />
+        <module name="common" />
+        <module name="ingestion" />
+        <module name="alerting" />
       </profile>
     </annotationProcessing>
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
-      <module name="anti-fraud-monitor" options="-parameters" />
+      <module name="alerting" options="-parameters" />
+      <module name="anti-fraud-monitor" options="" />
+      <module name="common" options="-parameters" />
+      <module name="ingestion" options="-parameters" />
+      <module name="scoring" options="-parameters" />
     </option>
   </component>
 </project>

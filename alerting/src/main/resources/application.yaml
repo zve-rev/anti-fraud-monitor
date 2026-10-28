@@ -1,0 +1,15 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: alerting-service
+  datasource:
+    url: jdbc:postgresql://localhost:5433/antifraud
+    username: antifraud
+    password: antifraud
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true

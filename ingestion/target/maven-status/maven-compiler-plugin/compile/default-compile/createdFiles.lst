@@ -1,0 +1,8 @@
+com\zverev\ingestion\exception\GlobalExceptionHandler.class
+com\zverev\ingestion\controller\TransactionController.class
+com\zverev\ingestion\dto\TransactionRequest.class
+com\zverev\ingestion\exception\DuplicateTransactionException.class
+com\zverev\ingestion\kafka\TransactionEventProducer.class
+com\zverev\ingestion\dto\TransactionCreatedResponse.class
+com\zverev\ingestion\IngestionApplication.class
+com\zverev\ingestion\service\TransactionService.class
