@@ -2,7 +2,6 @@ package com.zverev.scoring.service;
 
 import com.zverev.entity.Alert;
 import com.zverev.entity.Transaction;
-import com.zverev.entity.enums.TransactionStatus;
 import com.zverev.scoring.guard.Guard;
 import org.springframework.stereotype.Service;
 

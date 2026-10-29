@@ -26,8 +26,9 @@ import java.util.UUID;
 @Slf4j
 public class TransactionEventConsumer {
 
+    private static final String KAFKA_TOPIC = "transactions.raw";
     private static final String REDIS_KEY_PREFIX = "processed:event:";
-    public static final int TTL = 24;
+    private static final Duration TTL = Duration.ofHours(24);
 
     private final TransactionRepository transactionRepository;
     private final GuardFilterService guardFilterService;
@@ -36,7 +37,7 @@ public class TransactionEventConsumer {
     @RetryableTopic(
             backOff = @BackOff(delay = 2000, multiplier = 2.0)
     )
-    @KafkaListener(topics = "transactions.raw", groupId = "antifraud-group")
+    @KafkaListener(topics = KAFKA_TOPIC, groupId = "antifraud-group")
     @Transactional
     public void consume(TransactionEvent transactionEvent) {
         UUID externalId = transactionEvent.externalId();
@@ -46,8 +47,7 @@ public class TransactionEventConsumer {
 
         log.info("Processing transaction event: externalId={}", externalId);
 
-        Transaction transaction = transactionRepository
-                .findByExternalId(externalId)
+        Transaction transaction = transactionRepository.findByExternalId(externalId)
                 .orElseThrow(() -> new TransactionNotFoundException(externalId));
 
         guardFilterService.filter(transaction);
@@ -63,7 +63,7 @@ public class TransactionEventConsumer {
 
     private boolean transactionEventIsAlreadyProcessed(String key) {
         Boolean isProcessed = redisTemplate.opsForValue()
-                .setIfAbsent(key, "1", Duration.ofHours(TTL));
+                .setIfAbsent(key, "1", TTL);
         return Boolean.FALSE.equals(isProcessed);
     }
 

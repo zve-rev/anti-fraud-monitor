@@ -6,6 +6,7 @@ COPY common/pom.xml common/
 COPY ingestion/pom.xml ingestion/
 COPY scoring/pom.xml scoring/
 COPY alerting/pom.xml alerting/
+COPY gateway/pom.xml gateway/
 
 RUN mvn dependency:go-offline -B
 
