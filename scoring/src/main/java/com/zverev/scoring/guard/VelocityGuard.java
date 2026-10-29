@@ -27,6 +27,10 @@ public class VelocityGuard implements Guard {
 
         Long currentCount = stringRedisTemplate.opsForValue().increment(key);
 
+        if (currentCount == null) {
+            return Optional.empty();
+        }
+
         if (currentCount == 1L) {
             stringRedisTemplate.expire(key, WINDOW);
         }
