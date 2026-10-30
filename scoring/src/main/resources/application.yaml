@@ -1,21 +1,25 @@
 spring:
   application:
     name: scoring-service
+
   datasource:
-    url: jdbc:postgresql://localhost:5433/antifraud
-    username: antifraud
-    password: antifraud
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/antifraud}
+    username: ${SPRING_DATASOURCE_USERNAME:antifraud}
+    password: ${SPRING_DATASOURCE_PASSWORD:antifraud}
     driver-class-name: org.postgresql.Driver
+
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: true
+
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
       group-id: antifraud-group
       auto-offset-reset: earliest

@@ -3,15 +3,15 @@ services:
     image: postgres:16
     container_name: antifraud-postgres
     environment:
-      POSTGRES_DB: antifraud
-      POSTGRES_USER: antifraud
-      POSTGRES_PASSWORD: antifraud
+      POSTGRES_DB: ${POSTGRES_DB:-antifraud}
+      POSTGRES_USER: ${POSTGRES_USER:-antifraud}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-antifraud}
     ports:
-      - "5433:5432"
+      - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U antifraud"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-antifraud}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -20,7 +20,7 @@ services:
     image: redis:7-alpine
     container_name: antifraud-redis
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     command: redis-server --appendonly yes
     volumes:
       - redisdata:/data
@@ -34,7 +34,7 @@ services:
     image: apache/kafka:3.7.0
     container_name: antifraud-kafka
     ports:
-      - "9092:9092"
+      - "${KAFKA_PORT:-9092}:9092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -64,7 +64,7 @@ services:
       kafka:
         condition: service_healthy
     ports:
-      - "8090:8080"
+      - "${KAFKA_UI_PORT:-8090}:8080"
     environment:
       - KAFKA_CLUSTERS_0_NAME=local-kafka
       - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:29092
@@ -80,9 +80,11 @@ services:
       kafka:
         condition: service_healthy
     ports:
-      - "8081:8081"
+      - "${INGESTION_PORT:-8081}:8081"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/antifraud
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-antifraud}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-antifraud}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-antifraud}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
 
   scoring:
@@ -98,7 +100,9 @@ services:
       kafka:
         condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/antifraud
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-antifraud}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-antifraud}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-antifraud}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
@@ -112,9 +116,11 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "8082:8082"
+      - "${ALERTING_PORT:-8082}:8082"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/antifraud
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-antifraud}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-antifraud}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-antifraud}
 
   gateway:
     build:
@@ -127,7 +133,7 @@ services:
       alerting:
         condition: service_started
     ports:
-      - "8080:8080"
+      - "${GATEWAY_PORT:-8080}:8080"
     environment:
       INGESTION_URI: http://ingestion:8081
       ALERTING_URI: http://alerting:8082

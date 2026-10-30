@@ -4,6 +4,7 @@ server:
 spring:
   application:
     name: gateway
+
   cloud:
     gateway:
       server:

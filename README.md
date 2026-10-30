@@ -1,620 +1,686 @@
-# Anti-Fraud Monitor
+<div align="center">
 
-Событийная система антифрод-скоринга карточных транзакций: приём платежей через REST, асинхронная оценка по набору правил через Kafka, хранение результатов в PostgreSQL и выдача алертов отдельным read-сервисом.
+# 🛡️ Anti-Fraud Monitor
 
-![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
+**Событийная система антифрод-мониторинга платёжных транзакций в режиме близком к real-time**
+
+![Java](https://img.shields.io/badge/Java-21-007396?logo=openjdk&logoColor=white)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.2-6DB33F?logo=springboot&logoColor=white)
 ![Spring Cloud](https://img.shields.io/badge/Spring%20Cloud-2025.1.4-6DB33F?logo=spring&logoColor=white)
-![Apache Kafka](https://img.shields.io/badge/Apache%20Kafka-3.7.0-231F20?logo=apachekafka&logoColor=white)
+![Kafka](https://img.shields.io/badge/Apache%20Kafka-3.7.0-231F20?logo=apachekafka&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)
-![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![Maven](https://img.shields.io/badge/Maven-multi--module-C71A36?logo=apachemaven&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-24-blue)
+
+</div>
 
 ---
 
-## Оглавление
+## 📑 Содержание
 
-1. [Проблема и бизнес-контекст](#1-проблема-и-бизнес-контекст)
-2. [Ключевые архитектурные решения и trade-offs](#2-ключевые-архитектурные-решения-и-trade-offs)
-3. [Технологический стек](#3-технологический-стек)
-4. [Anti-fraud правила](#4-anti-fraud-правила)
-5. [Структура проекта](#5-структура-проекта)
-6. [Быстрый старт](#6-быстрый-старт)
-7. [API Documentation](#7-api-documentation)
-8. [Тестирование](#8-тестирование)
-9. [Идемпотентность: детально](#9-идемпотентность-детально)
-10. [Roadmap](#10-roadmap)
-11. [Автор](#11-автор)
-
----
-
-## 1. Проблема и бизнес-контекст
-
-Обработка карточных транзакций требует решения в момент платежа, но оценка риска включает обращения к хранилищам состояния (например, счётчики активности по карте) и набор правил, который со временем растёт. Если скоринг выполняется синхронно внутри HTTP-запроса приёма платежа, его задержка и доступность напрямую определяют задержку и доступность самого приёма.
-
-В системе эти задачи разделены. Сервис приёма (`ingestion`) валидирует запрос, сохраняет транзакцию со статусом `NEW`, публикует событие в Kafka и отвечает `202 Accepted`. Сервис скоринга (`scoring`) читает событие, применяет правила и фиксирует итоговый статус `APPROVED`, `REVIEW` или `DECLINED` вместе со списком сработавших правил (алертов). Сервис `alerting` отдаёт транзакции и алерты на чтение. Единая точка входа — `gateway`.
-
-Реализованы три сценария обнаружения: сумма выше порога для валюты, мерчант из списка высокого риска, всплеск числа операций по одной карте за пять минут. Повторная отправка одного платежа и повторная доставка события из Kafka обрабатываются как дубликаты (раздел [9](#9-идемпотентность-детально)).
+1. [О проекте](#-о-проекте)
+2. [Архитектура и структура модулей](#-архитектура-и-структура-модулей)
+3. [Технологический стек](#-технологический-стек)
+4. [Основной функционал](#-основной-функционал)
+5. [Требования для запуска](#-требования-для-запуска)
+6. [Сборка и запуск](#-сборка-и-запуск)
+7. [REST API](#-rest-api)
+8. [Конфигурация и переменные окружения](#️-конфигурация-и-переменные-окружения)
+9. [Тестирование](#-тестирование)
+10. [Планы по развитию / TODO](#-планы-по-развитию--todo)
 
 ---
 
-## 2. Ключевые архитектурные решения и trade-offs
+## 📌 О проекте
 
-### Топология
+**Anti-Fraud Monitor** — многомодульное Spring Boot-приложение, которое принимает платёжные транзакции, асинхронно прогоняет их через набор антифрод-правил и присваивает итоговое решение:
+
+| Статус | Значение |
+|:---|:---|
+| `NEW` | Транзакция принята и сохранена, скоринг ещё не выполнен |
+| `APPROVED` | Ни одно правило не сработало |
+| `REVIEW` | Сработали правила уровня `MEDIUM`/`HIGH` — требуется ручная проверка |
+| `DECLINED` | Сработало хотя бы одно правило уровня `CRITICAL` |
+
+**Бизнес-задача.** Банк или платёжный провайдер должен быстро принимать поток транзакций, не блокируя приём тяжёлой аналитикой, и при этом фиксировать *почему* транзакция была помечена подозрительной. Проект решает её через:
+
+- **разделение write- и read-стороны** (приём / скоринг / чтение результатов — три независимых сервиса);
+- **асинхронный скоринг** через Kafka — приём отвечает `202 Accepted` сразу после сохранения;
+- **расширяемый движок правил** (паттерн *Guard*) — новое правило добавляется одним `@Component`;
+- **аудируемость** — каждое сработавшее правило сохраняется как отдельный `Alert` с severity и текстовым пояснением.
+
+---
+
+## 🏗 Архитектура и структура модулей
+
+### Общая схема
 
 ```mermaid
 flowchart LR
-    Client(["Client"]) -->|"HTTP :8080"| GW["gateway"]
-    GW -->|"POST /api/v1/transactions"| ING["ingestion :8081"]
-    GW -->|"GET /api/v1/transactions, GET /api/v1/alerts"| ALR["alerting :8082"]
-    ING -->|"INSERT, status NEW"| PG[("PostgreSQL")]
-    ING -->|"publish transactions.raw"| K{{"Kafka"}}
-    K -->|"consume"| SC["scoring"]
-    SC -->|"SET NX processed:event, INCR velocity:card"| R[("Redis")]
-    SC -->|"UPDATE status, INSERT alerts"| PG
-    ALR -->|"SELECT, read-only"| PG
+    Client([Клиент / платёжный шлюз])
+
+    subgraph Edge
+        GW["gateway :8080<br/>Spring Cloud Gateway"]
+    end
+
+    subgraph Services
+        ING["ingestion :8081<br/>write-side"]
+        SCR["scoring<br/>Kafka consumer, без HTTP"]
+        ALT["alerting :8082<br/>read-side"]
+    end
+
+    subgraph Infrastructure
+        PG[("PostgreSQL 16<br/>antifraud")]
+        KF[["Kafka<br/>topic: transactions.raw"]]
+        RD[("Redis 7<br/>velocity + idempotency")]
+    end
+
+    Client -->|"POST /api/v1/transactions"| GW
+    Client -->|"GET /api/v1/transactions<br/>GET /api/v1/alerts"| GW
+    GW -->|POST| ING
+    GW -->|GET| ALT
+
+    ING -->|"INSERT (status=NEW)"| PG
+    ING -->|"TransactionEvent"| KF
+    KF -->|"group: antifraud-group"| SCR
+    SCR <-->|"SELECT / UPDATE status + INSERT alerts"| PG
+    SCR <-->|"счётчики и дедупликация"| RD
+    ALT -->|"SELECT (read-only)"| PG
 ```
 
-### Путь транзакции
+### Жизненный цикл транзакции
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant C as Client
+    participant C as Клиент
     participant G as gateway
     participant I as ingestion
-    participant P as PostgreSQL
-    participant K as Kafka transactions.raw
+    participant DB as PostgreSQL
+    participant K as Kafka
     participant S as scoring
     participant R as Redis
 
     C->>G: POST /api/v1/transactions
-    G->>I: route by path and method
-    I->>P: exists by externalId
-    alt externalId already exists
-        I-->>C: 409 duplicate_transaction
-    else new externalId
-        I->>P: INSERT transaction, status NEW
-        I->>K: send, key = cardToken
-        I-->>C: 202 Accepted, status NEW
-    end
+    G->>I: проксирование
+    I->>DB: existsByExternalId? (идемпотентность)
+    I->>DB: INSERT transaction (status = NEW)
+    I->>K: send(transactions.raw, key = cardToken)
+    I-->>C: 202 Accepted {transactionId, status: NEW}
 
     K->>S: TransactionEvent
-    S->>R: SET processed:event:externalId NX, TTL 24h
-    alt key already present
-        S-->>S: skip as duplicate
-    else first delivery
-        S->>P: SELECT transaction by externalId
-        S->>R: INCR velocity:card:cardToken
-        S->>S: AmountThreshold, HighRiskMerchant, Velocity
-        S->>P: UPDATE status, INSERT alerts
-        opt exception in consume
-            S->>K: retry topics with backoff, then DLT
-        end
-    end
+    S->>R: SETNX processed:event:{externalId} (TTL 24h)
+    S->>DB: findByExternalId
+    S->>S: GuardFilterService → AmountThreshold, HighRiskMerchant, Velocity
+    S->>R: INCR velocity:card:{cardToken} (TTL 5 мин)
+    S->>DB: INSERT alerts + UPDATE status (APPROVED / REVIEW / DECLINED)
+
+    C->>G: GET /api/v1/transactions
+    G->>DB: через alerting (read-only)
 ```
 
-### 2.1. Асинхронный скоринг через Kafka
+### Структура репозитория
 
-**Проблема.** Синхронный скоринг в запросе приёма связывает задержку и доступность приёма с Redis и вычислением правил.
-
-**Решение.** `ingestion` сохраняет транзакцию (`NEW`), публикует `TransactionEvent` в топик `transactions.raw` с ключом `cardToken` и отвечает `202 Accepted` с заголовком `Location`. `scoring` читает топик в consumer group `antifraud-group` (`auto-offset-reset: earliest`). События сериализуются в JSON (`JacksonJsonSerializer` / `JacksonJsonDeserializer`).
-
-**Почему Kafka, а не синхронный HTTP-вызов scoring.** Приём продолжает работать при остановке `scoring`: события накапливаются в топике и обрабатываются после восстановления.
-
-**Почему Kafka, а не RabbitMQ.** Сообщения хранятся в журнале, порядок гарантируется внутри партиции. Ключ `cardToken` направляет все события одной карты в одну партицию, что сохраняет порядок обработки по карте и позволяет масштабировать `scoring` по числу партиций (в compose `KAFKA_NUM_PARTITIONS=3`). Явного создания топика в коде нет, используется значение брокера.
-
-**Trade-off.** Итоговый статус появляется с задержкой: клиент получает `NEW` и узнаёт результат через `GET /api/v1/transactions` (eventual consistency). Добавляется инфраструктурный компонент. В compose развёрнут один брокер в режиме KRaft (`broker,controller`) с replication factor 1 для служебных топиков, поэтому отказоустойчивость кластера Kafka не обеспечивается.
-
-### 2.2. Разделение записи и чтения (command/query separation)
-
-**Проблема.** Путь записи (приём, скоринг) и путь чтения (выдача для аналитиков) имеют разные зависимости и профиль нагрузки.
-
-**Решение.** `ingestion` обрабатывает только `POST`, `scoring` записывает результат, `alerting` обрабатывает только `GET` в `@Transactional(readOnly = true)`. `gateway` маршрутизирует один путь `/api/v1/transactions` по HTTP-методу: `POST` в `ingestion`, `GET` в `alerting`. В compose `alerting` зависит только от PostgreSQL.
-
-**Почему не один сервис.** Read-сторона разворачивается и масштабируется независимо от записи и не зависит от Kafka и Redis при старте.
-
-**Почему не полноценный CQRS с отдельной read-моделью.** Отдельное хранилище и проекции требуют дополнительного потока событий и вносят второй уровень eventual consistency. Здесь read-сторона читает ту же PostgreSQL.
-
-**Trade-off.** Сервисы используют общую схему БД и общий модуль `common` (сущности, репозитории, enum-ы). Изменение сущности затрагивает все модули, а read-модель не оптимизирована отдельно от write-модели.
-
-### 2.3. Redis для velocity-правила
-
-**Проблема.** Правило считает число транзакций по карте за пятиминутное окно и вычисляется на каждое событие.
-
-**Решение.** Атомарный `INCR` по ключу `velocity:card:{cardToken}`; на первом инкременте (`count == 1`) выставляется `EXPIRE` 5 минут. TTL ключа определяет границу окна.
-
-**Почему Redis, а не `COUNT` в PostgreSQL.** `INCR` выполняется за O(1) и не нагружает OLTP-базу. Запрос `COUNT` по карте и времени выполнялся бы на каждое событие, а в схеме нет индекса по `card_token` и `occurred_at`.
-
-**Trade-off.**
-- Окно фиксированное, а не скользящее: оно открывается первой транзакцией и закрывается по TTL, поэтому серия операций на границе двух окон может пройти без срабатывания правила.
-- Счётчик ведётся по времени обработки, а не по `occurredAt`.
-- `INCR` и `EXPIRE` — две отдельные команды, между ними нет атомарности.
-- Счётчик живёт только в Redis (`appendonly yes` в compose).
-
-### 2.4. Идемпотентность на двух уровнях
-
-**Проблема.** Клиенты повторяют запросы, а Kafka гарантирует доставку «не менее одного раза».
-
-**Решение.**
-- Уровень API: клиент передаёт `externalId` (UUID). Предварительная проверка `existsByExternalId` возвращает `409`, уникальное ограничение на `transactions.external_id` служит страховкой на уровне БД.
-- Уровень consumer: `SET NX` с TTL 24 часа по ключу `processed:event:{externalId}` выполняется до обработки и отсекает повторную доставку, не обращаясь к PostgreSQL.
-
-**Почему Redis `SET NX`, а не проверка статуса в БД.** Операция атомарна, выполняется за O(1), а TTL ограничивает объём хранимых ключей. Повторное событие не доходит до guard-ов, поэтому velocity-счётчик не увеличивается дважды.
-
-**Trade-off.** Ключ устанавливается до обработки, и его жизненный цикл не связан с транзакцией БД. Границы гарантий описаны в разделе [9](#9-идемпотентность-детально).
-
-### 2.5. Retry с отдельными топиками и DLT
-
-**Проблема.** Временные сбои (БД, Redis, транзакция ещё не видна для чтения) не должны блокировать обработку остальных карт.
-
-**Решение.** `@RetryableTopic(backOff = @BackOff(delay = 2000, multiplier = 2.0))` на consumer. Исключение в `consume()` отправляет событие в retry-топик с экспоненциальной задержкой (2 с, множитель 2.0), после исчерпания попыток событие попадает в DLT. Retry-топики и DLT создаются Spring Kafka автоматически. Число попыток явно не задано, используется значение по умолчанию Spring Kafka.
-
-**Почему non-blocking retry, а не блокирующий `DefaultErrorHandler`.** При блокирующем повторе партиция стоит, пока обрабатывается проблемное сообщение, и задерживаются события других карт из той же партиции.
-
-**Trade-off.** Повторно обрабатываемые события выходят из порядка относительно остальных событий той же карты. Растёт число топиков. Обработчика DLT (`@DltHandler`) в коде нет: сообщения накапливаются в DLT и доступны для просмотра через Kafka UI.
-
-### 2.6. Правила как стратегии (`Guard`)
-
-**Решение.** Интерфейс `Guard` (`evaluate(Transaction)` и `getRule()`) реализуют три `@Component`. `GuardFilterService` получает `List<Guard>` через внедрение зависимостей и выполняет все правила, превращая каждое нарушение в `Alert`. Новое правило добавляется классом-компонентом и значением в enum `Rule`, без изменения `GuardFilterService`.
-
-**Trade-off.** Правила выполняются последовательно и все целиком, без досрочного выхода после `CRITICAL`. `VelocityGuard` имеет побочный эффект (инкремент счётчика) внутри `evaluate`.
-
-### 2.7. Поведение при деградации Redis
-
-`VelocityGuard` трактует `null` в ответе `INCR` как отсутствие нарушения (fail-open). Недоступность Redis выражается исключением, которое уходит в retry-цепочку (п. 2.5), так как та же зависимость используется проверкой идемпотентности. Решение «пропустить проверку» ограничено случаем `null`.
-
----
-
-## 3. Технологический стек
-
-| Слой | Технология | Версия | Назначение |
-|---|---|---|---|
-| Язык | Java | 21 | `java.version=21` в parent POM |
-| Фреймворк | Spring Boot | 4.1.2 | `spring-boot-starter-parent` |
-| API Gateway | Spring Cloud Gateway (WebFlux) | Spring Cloud 2025.1.4 | Маршрутизация по пути и HTTP-методу |
-| Брокер | Apache Kafka (KRaft) | 3.7.0 | Транспорт событий `transactions.raw`, retry-топики, DLT |
-| Клиент Kafka | Spring Kafka (`spring-boot-starter-kafka`) | управляется Boot | `KafkaTemplate`, `@KafkaListener`, `@RetryableTopic` |
-| База данных | PostgreSQL | 16 | Транзакции и алерты |
-| Доступ к данным | Spring Data JPA / Hibernate | управляется Boot | Сущности, репозитории |
-| Состояние | Redis + Spring Data Redis | 7 (`redis:7-alpine`) | Velocity-счётчики, ключи идемпотентности |
-| Валидация | Jakarta Validation (`spring-boot-starter-validation`) | управляется Boot | Проверка входного DTO |
-| Сборка | Maven (multi-module), Lombok | 3.9 (образ сборки) | 5 модулей |
-| Контейнеры | Docker, Docker Compose | — | Локальное окружение целиком |
-| Мониторинг брокера | Kafbat Kafka UI | `latest` | Просмотр топиков, retry-топиков и DLT |
-| Операционные эндпоинты | Spring Boot Actuator (gateway) | управляется Boot | `health`, `info`, `gateway` |
-| Тесты | JUnit 5, Mockito, AssertJ, Spring MockMvc | управляется Boot | Unit и web-slice тесты |
-
-### Сборка образов
-
-Dockerfile сервисов `ingestion`, `scoring`, `alerting` построены по одной схеме (multi-stage):
-
-1. Стадия сборки `maven:3.9-eclipse-temurin-21`: сначала копируются только `pom.xml` всех модулей и выполняется `mvn dependency:go-offline`, поэтому слой с зависимостями кэшируется и не пересобирается при изменении исходников.
-2. Копируются исходники `common` и целевого модуля, сборка `mvn -pl common,<module> -am clean package -DskipTests`.
-3. Финальный образ `eclipse-temurin:21-jre` содержит только собранный `app.jar`.
-
-`.dockerignore` исключает `target/`, `.idea/`, `*.iml`, `.git/`, `_legacy/`, `*.log`, `.DS_Store`. `.gitignore` исключает `target/`, `.idea/`, `*.iml`, `.DS_Store`, `*.log`, `.env`.
-
----
-
-## 4. Anti-fraud правила
-
-| Правило (`Rule`) | Severity | Условие срабатывания |
-|---|---|---|
-| `AMOUNT_THRESHOLD` | `MEDIUM` | Сумма строго больше порога для валюты транзакции |
-| `HIGH_RISK_MERCHANT` | `HIGH` | `merchantName` точно (с учётом регистра) совпадает с одним из: `Casino`, `Online Poker`, `Crypto Exchange`, `Gambling`, `Wire Transfer` |
-| `VELOCITY` | `CRITICAL` | Более 5 транзакций с одним `cardToken` в пятиминутном окне |
-
-Пороги `AMOUNT_THRESHOLD`:
-
-| Валюта | Порог |
-|---|---|
-| EUR | 5 000 |
-| CHF | 5 000 |
-| CAD | 7 000 |
-| AUD | 8 000 |
-| BRL | 30 000 |
-| JPY | 800 000 |
-
-Сравнение строгое: сумма, равная порогу, не создаёт алерт. Шестая и последующие транзакции карты в окне создают алерт `VELOCITY`. Уровень `LOW` определён в `AlertSeverity`, но ни одно правило его не использует.
-
-### Логика итогового статуса
-
-| Результат оценки | Статус |
-|---|---|
-| Сработавших правил нет | `APPROVED` |
-| Есть алерт с severity `CRITICAL` | `DECLINED` |
-| Есть алерты, ни один не `CRITICAL` | `REVIEW` |
-
-Начальный статус транзакции при создании — `NEW`. Статус `DECLINED` в текущем наборе правил возможен только при срабатывании `VELOCITY`.
-
-```mermaid
-flowchart TD
-    A["Guards: AmountThreshold, HighRiskMerchant, Velocity"] --> B{"Any alerts?"}
-    B -- "no" --> OK["APPROVED"]
-    B -- "yes" --> C{"Any CRITICAL?"}
-    C -- "yes" --> D["DECLINED"]
-    C -- "no" --> E["REVIEW"]
-```
-
----
-
-## 5. Структура проекта
-
-```
+```text
 anti-fraud-monitor/
-├── pom.xml                         # parent POM: Spring Boot 4.1.2, Spring Cloud 2025.1.4, 5 модулей
-├── docker-compose.yaml             # postgres, redis, kafka, kafka-ui, ingestion, scoring, alerting, gateway
-├── .dockerignore
-├── .gitignore
+├── pom.xml                      # parent POM (Spring Boot 4.1.2, Java 21, Spring Cloud BOM)
+├── docker-compose.yaml          # Postgres, Redis, Kafka (KRaft), Kafka UI + все сервисы
+├── amplicode.xml                # настройки persistence-юнитов для плагина Amplicode (IDE)
 │
-├── common/                         # общий модуль: модель данных и контракт события
+├── common/                      # 📦 библиотека (не запускается)
 │   └── src/main/java/com/zverev/
-│       ├── dto/                    # TransactionEvent (record) - событие в Kafka
-│       ├── entity/                 # Transaction, Alert
-│       │   └── enums/              # AlertSeverity, CurrencyCode, MerchantCountry, Rule, TransactionStatus
-│       ├── exception/              # TransactionNotFoundException
-│       └── repository/             # TransactionRepository, AlertRepository
+│       ├── dto/                 #   TransactionEvent — контракт Kafka-события
+│       ├── entity/              #   Transaction, Alert (JPA)
+│       │   └── enums/           #   AlertSeverity, CurrencyCode, MerchantCountry, Rule, TransactionStatus
+│       ├── exception/           #   TransactionNotFoundException
+│       └── repository/          #   TransactionRepository, AlertRepository
 │
-├── ingestion/                      # приём транзакций (write), порт 8081
-│   ├── Dockerfile
-│   └── src/
-│       ├── main/java/com/zverev/ingestion/
-│       │   ├── config/             # JpaConfig (@EntityScan, @EnableJpaRepositories)
-│       │   ├── controller/         # TransactionController (POST)
-│       │   ├── dto/                # TransactionRequest, TransactionCreatedResponse
-│       │   ├── exception/          # GlobalExceptionHandler, TransactionAlreadyExistsException
-│       │   ├── kafka/              # TransactionEventProducer
-│       │   └── service/            # TransactionService
-│       ├── main/resources/application.yaml
-│       └── test/                   # TransactionControllerTest, TransactionServiceTest
+├── ingestion/                   # ✍️ write-side, порт 8081
+│   └── src/main/java/com/zverev/ingestion/
+│       ├── controller/          #   TransactionController (POST)
+│       ├── service/             #   TransactionService
+│       ├── kafka/               #   TransactionEventProducer
+│       ├── dto/                 #   TransactionRequest, TransactionCreatedResponse
+│       ├── exception/           #   GlobalExceptionHandler, TransactionAlreadyExistsException
+│       └── config/              #   JpaConfig
 │
-├── scoring/                        # асинхронный скоринг (consumer), без HTTP-порта
-│   ├── Dockerfile
-│   └── src/
-│       ├── main/java/com/zverev/scoring/
-│       │   ├── dto/                # GuardViolation
-│       │   ├── guard/              # Guard, AmountThresholdGuard, HighRiskMerchantGuard, VelocityGuard
-│       │   ├── kafka/              # TransactionEventConsumer (@RetryableTopic, идемпотентность, статус)
-│       │   └── service/            # GuardFilterService
-│       ├── main/resources/application.yaml
-│       └── test/                   # AmountThresholdGuardTest, HighRiskMerchantGuardTest,
-│                                   # VelocityGuardTest, TransactionEventConsumerTest
+├── scoring/                     # 🧮 движок правил, Kafka-consumer (HTTP-слоя нет)
+│   └── src/main/java/com/zverev/scoring/
+│       ├── kafka/               #   TransactionEventConsumer
+│       ├── service/             #   GuardFilterService
+│       ├── guard/               #   Guard + AmountThresholdGuard, HighRiskMerchantGuard, VelocityGuard
+│       └── dto/                 #   GuardViolation
 │
-├── alerting/                       # чтение транзакций и алертов (read), порт 8082
-│   ├── Dockerfile
-│   └── src/
-│       ├── main/java/com/zverev/alerting/
-│       │   ├── config/             # JpaConfig
-│       │   ├── controller/         # AlertController, TransactionQueryController (GET)
-│       │   ├── dto/                # AlertResponse, TransactionResponse
-│       │   └── service/            # AlertQueryService, TransactionQueryService (readOnly, маскирование карты)
-│       ├── main/resources/application.yaml
-│       └── test/                   # TransactionQueryControllerTest
+├── alerting/                    # 📖 read-side, порт 8082
+│   └── src/main/java/com/zverev/alerting/
+│       ├── controller/          #   TransactionQueryController, AlertQueryController
+│       ├── service/             #   TransactionQueryService, AlertQueryService
+│       ├── dto/                 #   TransactionResponse, AlertResponse
+│       └── config/              #   JpaConfig
 │
-└── gateway/                        # единая точка входа, порт 8080
-    ├── Dockerfile
-    └── src/main/
-        ├── java/com/zverev/gateway/GatewayApplication.java
-        └── resources/application.yaml   # маршруты, Actuator
+└── gateway/                     # 🚪 единая точка входа, порт 8080
+    └── src/main/resources/application.yaml   # маршруты (Spring Cloud Gateway, WebFlux)
 ```
 
-### Модель данных
+### Назначение модулей
 
-Схема создаётся Hibernate (`ddl-auto: update` в `ingestion` и `scoring`, `validate` в `alerting`). Enum-ы хранятся как строки (`EnumType.STRING`). Все колонки, кроме `transactions.status`, помечены `updatable = false`.
+| Модуль | Роль | Порт | Postgres | Kafka | Redis | Тип |
+|:---|:---|:---:|:---:|:---:|:---:|:---|
+| **`common`** | Общая модель: JPA-сущности, репозитории, enum-ы, Kafka-контракт `TransactionEvent`, доменное исключение | — | — | — | — | Библиотека (jar) |
+| **`ingestion`** | Приём транзакции: валидация, проверка дубликата по `externalId`, сохранение со статусом `NEW`, публикация события | `8081` | RW | producer | — | Spring MVC |
+| **`scoring`** | Потребление событий, запуск всех `Guard`-правил, создание `Alert`-ов, расчёт итогового статуса | — | RW | consumer | RW | Non-web (только Kafka) |
+| **`alerting`** | Только чтение: список транзакций (с алертами и маскированным номером карты) и список алертов | `8082` | RO | — | — | Spring MVC |
+| **`gateway`** | Маршрутизация внешнего трафика к `ingestion` / `alerting` по пути и HTTP-методу | `8080` | — | — | — | Spring WebFlux |
 
-| Таблица | Колонки |
-|---|---|
-| `transactions` | `id` (IDENTITY), `external_id` (UUID, NOT NULL, UNIQUE), `card_token`, `amount` (precision 19, scale 4), `currency_code` (length 3), `merchant_name`, `merchant_country`, `status` (length 20), `occurred_at`, `created_at` |
-| `alerts` | `id` (IDENTITY), `transaction_id` (FK на `transactions`, NOT NULL), `rule`, `severity`, `message` (length 500), `created_at` |
+### Взаимодействие компонентов
 
-Связь `Transaction` — `Alert`: `@OneToMany(cascade = ALL, orphanRemoval = true)`, на стороне `Alert` — `@ManyToOne(fetch = LAZY)`.
+- **Синхронный путь** (`клиент → gateway → ingestion/alerting`): HTTP. `gateway` разводит запросы по паре *путь + метод* — `POST /api/v1/transactions` уходит в `ingestion`, `GET`-запросы — в `alerting`.
+- **Асинхронный путь** (`ingestion → Kafka → scoring`): топик `transactions.raw`, ключ сообщения — `cardToken` (все транзакции одной карты попадают в одну партицию и обрабатываются строго по порядку), значение — JSON `TransactionEvent`.
+- **Общая БД.** Все три сервиса работают с одной схемой PostgreSQL `antifraud` через общие сущности из `common`. Событие в Kafka содержит бизнес-данные, но `scoring` перечитывает транзакцию из БД по `externalId` — БД остаётся источником истины.
+- **Redis** используется только `scoring`: для скользящего счётчика velocity и для дедупликации событий.
 
 ---
 
-## 6. Быстрый старт
+## 🧰 Технологический стек
 
-### Требования
+### Платформа и сборка
 
-- Docker и Docker Compose v2
-- Для запуска сервисов вне Docker дополнительно: JDK 21, Maven 3.9
+| Технология | Версия | Назначение |
+|:---|:---|:---|
+| Java | **21** | Язык и рантайм (`java.version=21`) |
+| Spring Boot | **4.1.2** | Родитель проекта (`spring-boot-starter-parent`) |
+| Spring Cloud | **2025.1.4** | BOM для `spring-cloud-starter-gateway-server-webflux` |
+| Apache Maven | multi-module | Сборка; `spring-boot-maven-plugin` (`repackage`) в исполняемых модулях |
+| Lombok | управляется Boot BOM | Геттеры, конструкторы, builder, логгер (`@Slf4j`) |
 
-### Запуск
+### Web и API
 
-<!-- TODO: заменить [your-username] на GitHub-логин -->
-```bash
-git clone https://github.com/[your-username]/anti-fraud-monitor.git
-cd anti-fraud-monitor
-docker compose up -d --build
-docker compose ps
+| Технология | Версия | Модули |
+|:---|:---|:---|
+| Spring Web (MVC) | из Boot 4.1.2 | `ingestion`, `alerting` |
+| Spring Cloud Gateway Server (WebFlux) | из Spring Cloud 2025.1.4 | `gateway` |
+| Spring Boot Actuator | из Boot 4.1.2 | `gateway` (`health`, `info`, `gateway`) |
+| Bean Validation (`spring-boot-starter-validation`, `jakarta.validation`) | из Boot 4.1.2 | `ingestion`, `common` |
+| springdoc-openapi (Swagger UI) | **3.1.1** | `ingestion`, `alerting` (`webmvc-ui`), `gateway` (`webflux-ui`) |
+
+### Данные и сообщения
+
+| Категория | Технология | Версия | Применение |
+|:---|:---|:---|:---|
+| СУБД | PostgreSQL | **16** (образ `postgres:16`) | Хранение транзакций и алертов |
+| ORM | Spring Data JPA / Hibernate | из Boot 4.1.2 | Репозитории и сущности в `common` |
+| Брокер | Apache Kafka (KRaft, без ZooKeeper) | **3.7.0** (образ `apache/kafka:3.7.0`) | Топик `transactions.raw` |
+| Kafka-клиент | `spring-boot-starter-kafka` | из Boot 4.1.2 | `JacksonJsonSerializer` / `JacksonJsonDeserializer`, `@RetryableTopic` |
+| Кэш / счётчики | Redis | **7** (образ `redis:7-alpine`, `appendonly yes`) | Velocity-окно и дедупликация |
+| Redis-клиент | `spring-boot-starter-data-redis` | из Boot 4.1.2 | `StringRedisTemplate` |
+| Сериализация | `spring-boot-starter-jackson` | из Boot 4.1.2 | JSON-события |
+| Отказоустойчивость | `@EnableResilientMethods` | Spring Framework (core) | Включено в `scoring` |
+
+### Тестирование
+
+| Технология | Где используется |
+|:---|:---|
+| JUnit 5 (`spring-boot-starter-test`) | Все модули |
+| Mockito (`@ExtendWith(MockitoExtension.class)`, `@MockitoBean`, `ArgumentCaptor`) | Юнит-тесты сервисов, guard-ов и consumer-а |
+| Spring MVC Test (`spring-boot-starter-webmvc-test`, `@WebMvcTest`, `MockMvc`) | Тесты контроллеров `ingestion` и `alerting` |
+| H2 (scope `test`) | Подключена в `common` |
+
+### Инфраструктура и инструменты
+
+| Инструмент | Образ / версия | Назначение |
+|:---|:---|:---|
+| Docker Compose | `docker-compose.yaml` | Локальная инфраструктура и контейнеризованный запуск сервисов |
+| Kafbat UI | `ghcr.io/kafbat/kafka-ui:latest` | Веб-интерфейс Kafka (порт `8090`) |
+| Amplicode | `amplicode.xml` | Конфигурация persistence-юнитов для IDE-плагина |
+
+---
+
+## 🎯 Основной функционал
+
+### 1. Приём транзакций (`ingestion`)
+
+- Валидация входящего запроса (Bean Validation):
+    - `externalId`, `currency`, `merchantCountry`, `occurredAt` — обязательны;
+    - `cardToken`, `merchantName` — не пустые, ≤ 255 символов;
+    - `amount` — строго положительный, до 15 знаков в целой и 4 в дробной части;
+    - `occurredAt` — не в будущем (`@PastOrPresent`).
+- **Идемпотентность по `externalId`**: повторная отправка той же транзакции → `409 Conflict`.
+- Сохранение в БД со статусом `NEW`, затем публикация `TransactionEvent` в Kafka.
+- Ответ `202 Accepted` с заголовком `Location` и телом `{ transactionId, status }`.
+- Единый обработчик ошибок (`@RestControllerAdvice`): `400` (невалидное тело / поля), `409` (дубликат).
+
+### 2. Антифрод-скоринг (`scoring`)
+
+Движок построен на интерфейсе `Guard` — каждое правило независимо и возвращает `Optional<GuardViolation>`. `GuardFilterService` автоматически подхватывает **все** бины `Guard` и для каждого нарушения создаёт `Alert`.
+
+| Правило (`Rule`) | Severity | Логика |
+|:---|:---:|:---|
+| `AMOUNT_THRESHOLD` | `MEDIUM` | Сумма **строго больше** порога для валюты: EUR/CHF — 5 000, CAD — 7 000, AUD — 8 000, BRL — 30 000, JPY — 800 000 |
+| `HIGH_RISK_MERCHANT` | `HIGH` | Точное совпадение (регистрозависимое) `merchantName` с: `Casino`, `Online Poker`, `Crypto Exchange`, `Gambling`, `Wire Transfer` |
+| `VELOCITY` | `CRITICAL` | Более **5** транзакций по одной карте за **5 минут** (Redis `INCR` + `EXPIRE`, ключ `velocity:card:{cardToken}`). При недоступности значения из Redis правило *fail-open* — не срабатывает |
+
+**Расчёт итогового статуса:**
+
+```text
+нет алертов                  → APPROVED
+есть алерты, нет CRITICAL    → REVIEW
+есть хотя бы один CRITICAL   → DECLINED
 ```
 
-Docker Compose поднимает инфраструктуру с healthcheck-ами (`postgres`: `pg_isready`, `redis`: `redis-cli ping`, `kafka`: `kafka-topics.sh --list`) и запускает сервисы в порядке `depends_on`: `ingestion` ждёт healthy `postgres` и `kafka`, `scoring` ждёт healthy `postgres`, `redis`, `kafka`, `alerting` ждёт healthy `postgres`, `gateway` стартует после `ingestion` и `alerting`. Данные сохраняются в томах `pgdata`, `redisdata`, `kafkadata`.
+**Надёжность обработки:**
 
-> `alerting` запускается с `ddl-auto: validate` и требует существующей схемы, которую создаёт `ingestion` (`ddl-auto: update`). Если `alerting` остановился с ошибкой валидации схемы, достаточно повторить `docker compose up -d alerting` после старта `ingestion`.
+- **Дедупликация событий** — `SET processed:event:{externalId} NX EX 24h` в Redis; повторная доставка того же события пропускается.
+- **Retry с экспоненциальной паузой** — `@RetryableTopic(backOff = @BackOff(delay = 2000, multiplier = 2.0))`: Spring Kafka автоматически создаёт retry-топики и DLT.
+- Consumer-метод выполняется в транзакции БД (`@Transactional`).
 
-### Сервисы и порты
+### 3. Чтение результатов (`alerting`)
 
-| Сервис | Контейнер | Порт на хосте | Назначение |
-|---|---|---|---|
-| gateway | `antifraud-gateway` | 8080 | Единая точка входа для API |
-| ingestion | `antifraud-ingestion` | 8081 | Приём транзакций |
-| alerting | `antifraud-alerting` | 8082 | Чтение транзакций и алертов |
-| scoring | `antifraud-scoring` | не публикуется | Kafka consumer, скоринг |
-| postgres | `antifraud-postgres` | 5433 (внутри сети 5432) | БД `antifraud`, пользователь `antifraud` |
-| redis | `antifraud-redis` | 6379 | Velocity и идемпотентность (AOF включён) |
-| kafka | `antifraud-kafka` | 9092 (внутри сети 29092) | Брокер, KRaft, 3 партиции по умолчанию |
-| kafka-ui | `antifraud-kafka-ui` | 8090 | Веб-интерфейс Kafka, кластер `local-kafka` |
+- Список всех транзакций вместе с вложенными алертами.
+- **Маскирование номера карты**: наружу отдаётся `**** 1234` (последние 4 символа токена), полный `cardToken` через API транзакций не раскрывается.
+- Список всех сработавших алертов (`rule`, `severity`, `message`, `createdAt`).
+- Все запросы выполняются в `@Transactional(readOnly = true)`.
 
-### Проверка сценария velocity
+### 4. Единая точка входа (`gateway`)
 
-Шесть транзакций по одной карте: первые пять получают `APPROVED`, шестая — `DECLINED` с алертом `VELOCITY`.
+- Маршрутизация по пути и HTTP-методу, адреса апстримов переопределяются переменными `INGESTION_URI` и `ALERTING_URI`.
+- Actuator-эндпоинты `health`, `info`, `gateway` (просмотр маршрутов).
+
+---
+
+## ✅ Требования для запуска
+
+| Компонент | Версия | Примечание |
+|:---|:---|:---|
+| **JDK** | **21+** | `java -version` |
+| **Apache Maven** | 3.9+ | Maven Wrapper в репозитории не обнаружен — нужен установленный `mvn` |
+| **Docker** + **Docker Compose v2** | любая актуальная | Для PostgreSQL, Redis, Kafka |
+| Свободные порты | `5433`, `6379`, `9092`, `8090`, `8080`, `8081`, `8082` | Postgres проброшен на **5433**, а не 5432 |
+
+Запускать PostgreSQL, Redis и Kafka вручную не нужно — всё поднимается через `docker-compose.yaml`.
+
+---
+
+## 🚀 Сборка и запуск
+
+Предусмотрено два режима: **A — инфраструктура в Docker, сервисы локально** (удобно для разработки) и **B — всё в контейнерах**.
+
+### Режим A. Инфраструктура в Docker, сервисы локально
+
+**1. Поднять инфраструктуру** (PostgreSQL, Redis, Kafka, Kafka UI):
 
 ```bash
-for i in $(seq 1 6); do
-  curl -s -X POST http://localhost:8080/api/v1/transactions \
-    -H "Content-Type: application/json" \
-    -d "{\"externalId\":\"$(uuidgen)\",\"cardToken\":\"card-1234\",\"amount\":100,\"currency\":\"EUR\",\"merchantName\":\"Shop\",\"merchantCountry\":\"GERMANY\",\"occurredAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
-  echo
-done
-
-curl -s http://localhost:8080/api/v1/transactions
-curl -s http://localhost:8080/api/v1/alerts
+docker compose up -d postgres redis kafka kafka-ui
+docker compose ps        # дождитесь статуса healthy у postgres, redis и kafka
 ```
 
-Топики, retry-топики и DLT можно просмотреть в Kafka UI: http://localhost:8090.
-
-### Запуск сервисов вне Docker
-
-Значения по умолчанию в `application.yaml` указывают на `localhost` (PostgreSQL `5433`, Kafka `9092`, Redis `6379`).
+**2. Собрать все модули:**
 
 ```bash
-docker compose up -d postgres redis kafka
-mvn clean package -DskipTests
+mvn clean install
+# без тестов:
+mvn clean install -DskipTests
+```
+
+**3. Запустить сервисы — каждый в отдельном терминале и именно в таком порядке:**
+
+```bash
+# 1) ingestion — создаёт схему БД (ddl-auto: update)
+mvn -pl ingestion spring-boot:run
+
+# 2) scoring — Kafka-consumer
+mvn -pl scoring spring-boot:run
+
+# 3) alerting — только после того, как схема создана (ddl-auto: validate)
+mvn -pl alerting spring-boot:run
+
+# 4) gateway — единая точка входа
+mvn -pl gateway spring-boot:run
+```
+
+Либо запуск собранных jar-файлов:
+
+```bash
 java -jar ingestion/target/ingestion-0.0.1-SNAPSHOT.jar
 java -jar scoring/target/scoring-0.0.1-SNAPSHOT.jar
 java -jar alerting/target/alerting-0.0.1-SNAPSHOT.jar
 java -jar gateway/target/gateway-0.0.1-SNAPSHOT.jar
 ```
 
-### Остановка
+> ⚠️ **Порядок запуска важен.** В проекте нет миграций Flyway/Liquibase: схему создаёт Hibernate (`ddl-auto: update`) в `ingestion` и `scoring`, а `alerting` работает в режиме `validate` и **не стартует на пустой БД**. Сначала запускайте `ingestion` (или `scoring`), потом `alerting`.
+
+### Режим B. Всё в Docker Compose
 
 ```bash
-docker compose down        # остановить, сохранить данные
-docker compose down -v     # остановить и удалить тома
+docker compose up -d --build
+docker compose logs -f ingestion scoring alerting gateway
 ```
 
----
+> ℹ️ Compose собирает образы по `<module>/Dockerfile` с контекстом в корне репозитория (`ingestion/Dockerfile`, `scoring/Dockerfile`, `alerting/Dockerfile`, `gateway/Dockerfile`). Эти файлы должны лежать в репозитории рядом с модулями.
+>
+> Из-за той же особенности со схемой БД (см. выше) `alerting` может упасть при самом первом старте, если стартанул раньше `ingestion`. В этом случае достаточно: `docker compose restart alerting`.
 
-## 7. API Documentation
+### Проверка работоспособности
 
-Базовый адрес через gateway: `http://localhost:8080`. Сервисы также доступны напрямую: `ingestion` на `:8081`, `alerting` на `:8082`.
+```bash
+# Gateway и маршруты
+curl http://localhost:8080/actuator/health
+curl http://localhost:8080/actuator/gateway/routes
 
-### Маршрутизация gateway
+# Swagger UI сервисов
+#   http://localhost:8081/swagger-ui/index.html   (ingestion)
+#   http://localhost:8082/swagger-ui/index.html   (alerting)
+#   http://localhost:8080/swagger-ui.html         (gateway)
+# Kafka UI
+#   http://localhost:8090
+```
 
-| Route id | Метод | Путь | Целевой сервис |
-|---|---|---|---|
-| `ingestion-create` | POST | `/api/v1/transactions` | `ingestion` (`INGESTION_URI`, по умолчанию `http://localhost:8081`) |
-| `alerting-transactions` | GET | `/api/v1/transactions` | `alerting` (`ALERTING_URI`, по умолчанию `http://localhost:8082`) |
-| `alerting-alerts` | GET | `/api/v1/alerts` | `alerting` |
+### Сценарий end-to-end
 
-### 7.1. Создание транзакции
-
-`POST /api/v1/transactions`, `Content-Type: application/json`
-
-| Поле | Тип | Ограничения |
-|---|---|---|
-| `externalId` | UUID | обязательное, ключ идемпотентности |
-| `cardToken` | string | не пустое, до 255 символов |
-| `amount` | decimal | обязательное, больше 0, до 15 цифр в целой части и до 4 в дробной |
-| `currency` | enum | `CAD`, `EUR`, `JPY`, `BRL`, `AUD`, `CHF` |
-| `merchantName` | string | не пустое, до 255 символов |
-| `merchantCountry` | enum | `CANADA`, `GERMANY`, `JAPAN`, `BRAZIL`, `AUSTRALIA`, `SWITZERLAND` |
-| `occurredAt` | ISO-8601 instant | обязательное, не в будущем |
+**bash:**
 
 ```bash
 curl -i -X POST http://localhost:8080/api/v1/transactions \
   -H "Content-Type: application/json" \
   -d '{
-    "externalId": "3f8c1a52-7a0e-4a58-9d3b-6a1d2b7c9e10",
-    "cardToken": "card-1234",
-    "amount": 100.00,
-    "currency": "EUR",
-    "merchantName": "Shop",
-    "merchantCountry": "GERMANY",
-    "occurredAt": "2026-10-29T10:00:00Z"
-  }'
+        "externalId": "'"$(uuidgen)"'",
+        "cardToken": "tok_4111111111111234",
+        "amount": 9500.00,
+        "currency": "EUR",
+        "merchantName": "Casino",
+        "merchantCountry": "GERMANY",
+        "occurredAt": "2026-10-29T10:00:00Z"
+      }'
+
+# через пару секунд — результат скоринга (REVIEW: сработали AMOUNT_THRESHOLD и HIGH_RISK_MERCHANT)
+curl -s http://localhost:8080/api/v1/transactions
+curl -s http://localhost:8080/api/v1/alerts
 ```
 
-**202 Accepted** — транзакция сохранена, событие опубликовано. Заголовок `Location: /api/v1/transactions/1`.
+**PowerShell:**
 
-```json
-{
-  "transactionId": 1,
-  "status": "NEW"
-}
+```powershell
+$body = @{
+    externalId      = [guid]::NewGuid().ToString()
+    cardToken       = "tok_4111111111111234"
+    amount          = 9500.00
+    currency        = "EUR"
+    merchantName    = "Casino"
+    merchantCountry = "GERMANY"
+    occurredAt      = "2026-10-29T10:00:00Z"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/v1/transactions `
+    -ContentType "application/json" -Body $body
+
+Invoke-RestMethod -Uri http://localhost:8080/api/v1/transactions
+Invoke-RestMethod -Uri http://localhost:8080/api/v1/alerts
 ```
 
-**400 Bad Request** — ошибка валидации (поля и сообщения через `;`) или нечитаемое тело (некорректный JSON, неизвестное значение enum).
-
-```json
-{ "error": "externalId: must not be null" }
-```
-
-```json
-{ "error": "Invalid request body: ..." }
-```
-
-**409 Conflict** — транзакция с таким `externalId` уже существует.
-
-```json
-{
-  "error": "duplicate_transaction",
-  "message": "Transaction with externalId 3f8c1a52-7a0e-4a58-9d3b-6a1d2b7c9e10 already exists",
-  "externalId": "3f8c1a52-7a0e-4a58-9d3b-6a1d2b7c9e10"
-}
-```
-
-| Код | Условие |
-|---|---|
-| 202 | Принято, статус `NEW` |
-| 400 | Не пройдена валидация или тело не читается |
-| 409 | Дубликат `externalId` |
-
-### 7.2. Список транзакций
-
-`GET /api/v1/transactions`
+**Проверка VELOCITY** — отправьте 6 транзакций по одной карте менее чем за 5 минут; шестая получит алерт `CRITICAL` и статус `DECLINED`:
 
 ```bash
-curl -s http://localhost:8080/api/v1/transactions
+for i in $(seq 1 6); do
+  curl -s -o /dev/null -w "tx $i -> HTTP %{http_code}\n" -X POST http://localhost:8080/api/v1/transactions \
+    -H "Content-Type: application/json" \
+    -d '{"externalId":"'"$(uuidgen)"'","cardToken":"tok_velocity_test","amount":10,
+         "currency":"EUR","merchantName":"Shop","merchantCountry":"GERMANY",
+         "occurredAt":"2026-10-29T10:00:00Z"}'
+done
 ```
 
-**200 OK** — массив всех транзакций с вложенными алертами. `cardTokenMasked` содержит последние четыре символа токена в формате `**** 1234`; для `null` или токена короче четырёх символов возвращается `****`. Пагинации нет.
+### Остановка и очистка
+
+```bash
+docker compose down            # остановить контейнеры, сохранить данные
+docker compose down -v         # + удалить тома pgdata, redisdata, kafkadata
+```
+
+---
+
+## 🔌 REST API
+
+Внешний клиент работает **только через gateway** (`http://localhost:8080`). Прямые адреса сервисов нужны для отладки.
+
+### Маршруты gateway
+
+| Маршрут (`id`) | Путь | Метод | Апстрим |
+|:---|:---|:---:|:---|
+| `ingestion-create` | `/api/v1/transactions` | `POST` | `ingestion` — `${INGESTION_URI:http://localhost:8081}` |
+| `alerting-transactions` | `/api/v1/transactions` | `GET` | `alerting` — `${ALERTING_URI:http://localhost:8082}` |
+| `alerting-alerts` | `/api/v1/alerts` | `GET` | `alerting` — `${ALERTING_URI:http://localhost:8082}` |
+
+### `POST /api/v1/transactions` — принять транзакцию *(ingestion)*
+
+**Тело запроса:**
+
+| Поле | Тип | Ограничения |
+|:---|:---|:---|
+| `externalId` | UUID | обязательное, уникальное |
+| `cardToken` | string | не пустое, ≤ 255 |
+| `amount` | decimal | `> 0`, до 15 цифр до запятой и 4 после |
+| `currency` | enum | `CAD`, `EUR`, `JPY`, `BRL`, `AUD`, `CHF` |
+| `merchantName` | string | не пустое, ≤ 255 |
+| `merchantCountry` | enum | `CANADA`, `GERMANY`, `JAPAN`, `BRAZIL`, `AUSTRALIA`, `SWITZERLAND` |
+| `occurredAt` | ISO-8601 instant | не в будущем |
+
+**Ответы:**
+
+| Код | Когда | Тело |
+|:---:|:---|:---|
+| `202 Accepted` | Транзакция принята | `{"transactionId": 1, "status": "NEW"}` + заголовок `Location: /api/v1/transactions/1` |
+| `400 Bad Request` | Ошибка валидации / нечитаемое тело | `{"error": "amount: must be greater than 0"}` |
+| `409 Conflict` | `externalId` уже существует | `{"error": "duplicate_transaction", "message": "...", "externalId": "..."}` |
+
+### `GET /api/v1/transactions` — список транзакций *(alerting)*
+
+Возвращает все транзакции с результатом скоринга и вложенными алертами:
 
 ```json
 [
   {
-    "id": 6,
+    "id": 1,
     "cardTokenMasked": "**** 1234",
-    "amount": 100.0000,
+    "amount": 9500.0000,
     "currency": "EUR",
-    "merchantName": "Shop",
+    "merchantName": "Casino",
     "merchantCountry": "GERMANY",
-    "status": "DECLINED",
+    "status": "REVIEW",
     "occurredAt": "2026-10-29T10:00:00Z",
-    "createdAt": "2026-10-29T10:00:01.482913Z",
+    "createdAt": "2026-10-29T10:00:01.123Z",
     "alerts": [
       {
-        "rule": "VELOCITY",
-        "severity": "CRITICAL",
-        "message": "Velocity exceeded for card card-1234: 6 transactions in last 5 minutes",
-        "createdAt": "2026-10-29T10:00:01.530117Z"
+        "rule": "AMOUNT_THRESHOLD",
+        "severity": "MEDIUM",
+        "message": "Amount 9500.0000 EUR exceeds threshold 5000 EUR",
+        "createdAt": "2026-10-29T10:00:02Z"
+      },
+      {
+        "rule": "HIGH_RISK_MERCHANT",
+        "severity": "HIGH",
+        "message": "High-risk merchant category: Casino",
+        "createdAt": "2026-10-29T10:00:02Z"
       }
     ]
   }
 ]
 ```
 
-`status` принимает значения `NEW`, `APPROVED`, `REVIEW`, `DECLINED`.
-
-### 7.3. Список алертов
-
-`GET /api/v1/alerts`
-
-```bash
-curl -s http://localhost:8080/api/v1/alerts
-```
-
-**200 OK** — массив всех алертов.
+### `GET /api/v1/alerts` — список алертов *(alerting)*
 
 ```json
 [
   {
-    "rule": "HIGH_RISK_MERCHANT",
-    "severity": "HIGH",
-    "message": "High-risk merchant category: Casino",
-    "createdAt": "2026-10-29T10:05:12.204871Z"
+    "rule": "VELOCITY",
+    "severity": "CRITICAL",
+    "message": "Velocity exceeded for card tok_velocity_test: 6 transactions in last 5 minutes",
+    "createdAt": "2026-10-29T10:03:11Z"
   }
 ]
 ```
 
-`rule`: `AMOUNT_THRESHOLD`, `HIGH_RISK_MERCHANT`, `VELOCITY`. `severity`: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`.
+### Справочник перечислений
 
-### 7.4. Операционные эндпоинты gateway
+| Enum | Значения |
+|:---|:---|
+| `TransactionStatus` | `NEW`, `APPROVED`, `REVIEW`, `DECLINED` |
+| `AlertSeverity` | `LOW`, `MEDIUM`, `HIGH`, `CRITICAL` |
+| `Rule` | `AMOUNT_THRESHOLD`, `HIGH_RISK_MERCHANT`, `VELOCITY` |
 
-Spring Boot Actuator открывает `health`, `info`, `gateway`.
+### OpenAPI
+
+| Сервис | Спецификация | UI |
+|:---|:---|:---|
+| ingestion | `http://localhost:8081/v3/api-docs` | `http://localhost:8081/swagger-ui/index.html` |
+| alerting | `http://localhost:8082/v3/api-docs` | `http://localhost:8082/swagger-ui/index.html` |
+| gateway | `http://localhost:8080/v3/api-docs` | `http://localhost:8080/swagger-ui.html` |
+
+---
+
+## ⚙️ Конфигурация и переменные окружения
+
+Все настройки лежат в `src/main/resources/application.yaml` соответствующего модуля. Благодаря *relaxed binding* Spring Boot любое свойство можно переопределить переменной окружения (`spring.datasource.url` → `SPRING_DATASOURCE_URL`).
+
+### Значения по умолчанию
+
+| Параметр | ingestion | scoring | alerting | gateway |
+|:---|:---|:---|:---|:---|
+| `spring.application.name` | `ingestion-service` | `scoring-service` | `alerting-service` | `gateway` |
+| `server.port` | `8081` | не задан (non-web) | `8082` | `8080` |
+| `spring.datasource.url` | `jdbc:postgresql://localhost:5433/antifraud` | то же | то же | — |
+| `spring.datasource.username` / `password` | `antifraud` / `antifraud` | то же | то же | — |
+| `spring.jpa.hibernate.ddl-auto` | `update` | `update` | **`validate`** | — |
+| `spring.jpa.show-sql` | `true` (+ `format_sql`) | `true` | `true` | — |
+| `spring.kafka.bootstrap-servers` | `localhost:9092` | `localhost:9092` | — | — |
+| `spring.data.redis.host` / `port` | — | `localhost` / `6379` | — | — |
+
+### Переменные окружения
+
+| Переменная | Сервис(ы) | Назначение | Локально | В Docker Compose |
+|:---|:---|:---|:---|:---|
+| `SPRING_DATASOURCE_URL` | ingestion, scoring, alerting | JDBC URL PostgreSQL | `jdbc:postgresql://localhost:5433/antifraud` | `jdbc:postgresql://postgres:5432/antifraud` |
+| `SPRING_DATASOURCE_USERNAME` | ingestion, scoring, alerting | Пользователь БД | `antifraud` | `antifraud` |
+| `SPRING_DATASOURCE_PASSWORD` | ingestion, scoring, alerting | Пароль БД | `antifraud` | `antifraud` |
+| `SPRING_KAFKA_BOOTSTRAP_SERVERS` | ingestion, scoring | Адрес Kafka | `localhost:9092` | `kafka:29092` |
+| `SPRING_DATA_REDIS_HOST` | scoring | Хост Redis | `localhost` | `redis` |
+| `SPRING_DATA_REDIS_PORT` | scoring | Порт Redis | `6379` | `6379` |
+| `INGESTION_URI` | gateway | URL сервиса ingestion | `http://localhost:8081` | `http://ingestion:8081` |
+| `ALERTING_URI` | gateway | URL сервиса alerting | `http://localhost:8082` | `http://alerting:8082` |
+| `SERVER_PORT` | ingestion, alerting, gateway | Порт HTTP-сервера | `8081` / `8082` / `8080` | — |
+
+> 🔐 Учётные данные `antifraud/antifraud` — **только для локальной разработки**. Для любых других окружений передавайте креды через переменные окружения или секрет-хранилище.
+
+### Kafka
+
+```properties
+# Топик
+transactions.raw                       # ключ = cardToken, значение = JSON TransactionEvent
+
+# producer (ingestion)
+spring.kafka.producer.key-serializer=org.apache.kafka.common.serialization.StringSerializer
+spring.kafka.producer.value-serializer=org.springframework.kafka.support.serializer.JacksonJsonSerializer
+
+# consumer (scoring)
+spring.kafka.consumer.group-id=antifraud-group
+spring.kafka.consumer.auto-offset-reset=earliest
+spring.kafka.consumer.key-deserializer=org.apache.kafka.common.serialization.StringDeserializer
+spring.kafka.consumer.value-deserializer=org.springframework.kafka.support.serializer.JacksonJsonDeserializer
+spring.kafka.consumer.properties.spring.json.trusted.packages=*
+```
+
+В `docker-compose.yaml` брокер поднят в режиме KRaft с двумя listener-ами: `EXTERNAL` (`localhost:9092`) — для приложений на хосте, `INTERNAL` (`kafka:29092`) — для контейнеров. Количество партиций по умолчанию — `3`.
+
+### Инфраструктура в Docker Compose
+
+| Сервис | Контейнер | Порт хоста → контейнера | Тома |
+|:---|:---|:---:|:---|
+| PostgreSQL 16 | `antifraud-postgres` | `5433 → 5432` | `pgdata` |
+| Redis 7 | `antifraud-redis` | `6379 → 6379` | `redisdata` |
+| Kafka 3.7.0 | `antifraud-kafka` | `9092 → 9092` | `kafkadata` |
+| Kafka UI | `antifraud-kafka-ui` | `8090 → 8080` | — |
+| ingestion | `antifraud-ingestion` | `8081 → 8081` | — |
+| scoring | `antifraud-scoring` | — | — |
+| alerting | `antifraud-alerting` | `8082 → 8082` | — |
+| gateway | `antifraud-gateway` | `8080 → 8080` | — |
+
+Для `postgres`, `redis` и `kafka` настроены healthcheck-и; прикладные сервисы стартуют по `depends_on: condition: service_healthy`.
+
+---
+
+## 🧪 Тестирование
 
 ```bash
-curl -s http://localhost:8080/actuator/health
-curl -s http://localhost:8080/actuator/gateway/routes
+mvn test                      # все модули
+mvn -pl scoring test          # один модуль
+mvn -pl scoring -am test      # модуль вместе с зависимостями
 ```
+
+| Модуль | Тестовый класс | Что покрыто |
+|:---|:---|:---|
+| `ingestion` | `TransactionControllerTest` (`@WebMvcTest`) | `202` для валидного запроса, `400` без `externalId`, `400` для отрицательной суммы, `409` для дубликата |
+| `ingestion` | `TransactionServiceTest` (Mockito) | Сохранение со статусом `NEW` и публикация события; при дубликате — исключение без сохранения и без события |
+| `scoring` | `AmountThresholdGuardTest` | Ниже порога, ровно на пороге (строгое `>`), выше порога, пороги по валютам (JPY) |
+| `scoring` | `HighRiskMerchantGuardTest` | Обычный мерчант, `Casino`, регистрозависимость |
+| `scoring` | `VelocityGuardTest` | 1-я транзакция (установка TTL), 5-я (без нарушения), 6-я (`CRITICAL`), `null` из Redis (fail-open) |
+| `scoring` | `TransactionEventConsumerTest` | `APPROVED` / `REVIEW` / `DECLINED`, пропуск дубликата, `TransactionNotFoundException` |
+| `alerting` | `TransactionQueryControllerTest` (`@WebMvcTest`) | `200` со списком и маскированной картой, `200` с пустым списком |
+
+Интеграционные тесты с реальными PostgreSQL / Kafka / Redis (например, на Testcontainers) в проекте пока отсутствуют.
 
 ---
 
-## 8. Тестирование
+## 🗺 Планы по развитию / TODO
 
-| Сервис | Класс | Тип | Количество |
-|---|---|---|---|
-| ingestion | `TransactionControllerTest` | `@WebMvcTest` + `MockMvc` | 4 |
-| ingestion | `TransactionServiceTest` | Mockito | 2 |
-| scoring | `AmountThresholdGuardTest` | Unit | 4 |
-| scoring | `HighRiskMerchantGuardTest` | Unit | 3 |
-| scoring | `VelocityGuardTest` | Mockito | 4 |
-| scoring | `TransactionEventConsumerTest` | Mockito | 5 |
-| alerting | `TransactionQueryControllerTest` | `@WebMvcTest` + `MockMvc` | 2 |
+Список составлен по результатам анализа кода. Приоритеты: 🔴 высокий (корректность / безопасность), 🟡 средний, 🟢 низкий.
 
-### Запуск
+### 🔴 Корректность и надёжность
 
-```bash
-mvn test
-```
+- [ ] **Идемпотентность в `scoring` может «терять» события при ретраях.** `TransactionEventConsumer` ставит Redis-ключ `processed:event:{externalId}` **до** обработки и не снимает его при ошибке. Если обработка упала (например, `TransactionNotFoundException`), повторная попытка из `@RetryableTopic` увидит ключ, молча завершится — а транзакция навсегда останется в `NEW`. Решение: ставить ключ после успешного коммита либо удалять его в `catch`/через `TransactionSynchronization`, либо перейти на идемпотентность на уровне БД (проверка статуса `NEW`).
+- [ ] **Гонка между коммитом и публикацией события в `ingestion`.** `kafkaTemplate.send` вызывается внутри `@Transactional` метода до коммита: `scoring` может получить событие раньше, чем транзакция станет видна в БД. Решение — **Transactional Outbox** (таблица `outbox` + публикация отдельным поллером/Debezium) или публикация через `@TransactionalEventListener(phase = AFTER_COMMIT)`.
+- [ ] **Velocity-счётчик не откатывается** при ретрае/ошибке: `INCR` выполняется до сохранения результата, повторная обработка завладеет «лишней» единицей и может дать ложный `CRITICAL`. Рассмотреть Lua-скрипт/скользящее окно на `ZSET` с привязкой к `occurredAt`.
+- [ ] **Нет миграций БД.** Схему создаёт Hibernate (`ddl-auto: update`) в двух сервисах одновременно, а `alerting` в режиме `validate` падает на пустой БД. Внедрить **Flyway** или **Liquibase**, перевести все сервисы на `validate`.
+- [ ] **Нет обработчика DLT.** После исчерпания ретраев сообщение уходит в Dead Letter Topic, но никто его не читает. Добавить `@DltHandler`, метрики и алертинг.
+- [ ] **`Location`-заголовок ведёт в никуда.** `POST` возвращает `Location: /api/v1/transactions/{id}`, но `GET /api/v1/transactions/{id}` не реализован.
 
----
+### 🔴 Безопасность
 
-## 9. Идемпотентность: детально
+- [ ] **Утечка номера карты через алерты.** `VelocityGuard` включает полный `cardToken` в `message`, а `GET /api/v1/alerts` отдаёт `message` без маскирования — это обходит маскирование в `TransactionResponse`. Использовать замаскированный токен в тексте алерта.
+- [ ] **Токен карты хранится в БД открытым текстом.** Рассмотреть хэширование/шифрование на уровне приложения или БД.
+- [ ] **Нет аутентификации и авторизации** на `gateway` (Spring Security + OAuth2/JWT, разделение ролей для write/read), нет rate limiting.
+- [ ] **Хардкод учётных данных** в `application.yaml` (и `trusted.packages: "*"` у десериализатора Kafka). Вынести секреты во внешние источники, сузить список доверенных пакетов до `com.zverev.dto`.
 
-Идемпотентность реализована на двух независимых уровнях, потому что повтор возможен в двух разных местах: на входе (клиент) и в потоке событий (брокер).
+### 🟡 Производительность и API
 
-### Уровень 1. API и БД
+- [ ] **Нет пагинации и фильтров.** `findAll()` в `alerting` грузит всё в память. Добавить `Pageable`, фильтры (статус, карта, период, severity) и сортировку.
+- [ ] **N+1 при выдаче транзакций.** Коллекция `alerts` ленивая и подгружается по одной транзакции — использовать `@EntityGraph` / `JOIN FETCH` или DTO-проекции.
+- [ ] Добавить `GET /api/v1/transactions/{id}` и `GET /api/v1/transactions?externalId=...`.
+- [ ] Для read-side рассмотреть отдельную реплику БД или CQRS-проекцию.
+- [ ] Перевести ключ Redis и окно velocity на конфигурируемые значения (сейчас окно 5 мин и лимит 5 захардкожены).
 
-1. Клиент генерирует `externalId` (UUID) и передаёт его в каждом запросе по одному платежу.
-2. `TransactionService.process` выполняет `existsByExternalId`; при совпадении выбрасывается `TransactionAlreadyExistsException`, которую `GlobalExceptionHandler` преобразует в `409` с телом `duplicate_transaction`. Запись и событие не создаются.
-3. Колонка `transactions.external_id` имеет ограничение `UNIQUE`, на уровне БД дубликат невозможен.
+### 🟡 Движок правил
 
-Клиент, не получивший ответ, может безопасно повторить запрос: `409` означает, что платёж уже принят.
+- [ ] **Вынести параметры правил в конфигурацию** (`@ConfigurationProperties`): пороги по валютам, список high-risk мерчантов, окно и лимит velocity. Сейчас они — константы в коде.
+- [ ] Список high-risk мерчантов сравнивается по точному совпадению строки с учётом регистра — перейти на категории (MCC), нормализацию и/или справочник в БД.
+- [ ] Новые правила: гео-аномалии (несовпадение страны мерчанта и истории карты), нетипичное время суток, резкий рост среднего чека, чёрные/белые списки карт.
+- [ ] Использовать уровень `LOW` (объявлен в `AlertSeverity`, но ни одно правило его не выдаёт) и взвешенный скоринг вместо простой логики «есть CRITICAL → DECLINED».
+- [ ] Пороги в `AmountThresholdGuard` заданы в номинале валюты — привести к единой базовой валюте через курсы.
 
-### Уровень 2. Consumer (Redis `SET NX`)
+### 🟢 Качество кода и DevOps
 
-```
-ключ:       processed:event:{externalId}
-операция:   setIfAbsent(key, "1", Duration.ofHours(24))   // SET NX с TTL, одна атомарная команда
-true:       первая доставка - обработка продолжается
-false:      дубликат - consume() завершается без обращения к БД и guard-ам
-```
-
-Проверка выполняется первой строкой `consume()`. Для дубликата не вызываются `findByExternalId`, `GuardFilterService.filter` и `save` (проверено тестом `duplicateEvent_skipped`). Благодаря этому повторная доставка не увеличивает velocity-счётчик.
-
-### Поведение в граничных случаях
-
-| Сценарий | Результат |
-|---|---|
-| Повторный `POST` с тем же `externalId` | `409`, запись и событие не создаются |
-| Повторная доставка события в течение 24 часов | Событие пропускается, статус и алерты не меняются |
-| Повторная доставка по истечении TTL (24 часа) | Ключ отсутствует, событие обрабатывается заново |
-| Исключение в `consume()` после установки ключа | Повтор из retry-топика пропускается как дубликат, транзакция остаётся в статусе `NEW` |
-| Транзакция ещё не найдена в БД на момент обработки | Выбрасывается `TransactionNotFoundException`, событие уходит в retry-цепочку, повтор пропускается как дубликат (см. строку выше) |
-
-### Границы гарантий
-
-- Ключ идемпотентности устанавливается до обработки и не откатывается вместе с транзакцией БД. При сбое после установки ключа обработка событий в retry-топиках не повторяется: гарантия соответствует «не более одного раза» для обработки при сбое.
-- Запись в БД и публикация события в `TransactionService.process` не атомарны: `kafkaTemplate.send` вызывается внутри `@Transactional`-метода до фиксации транзакции, отправка не ожидает подтверждения. Событие может быть прочитано `scoring` раньше, чем транзакция станет видна в БД.
-- Уникальное ограничение на `external_id` защищает данные от дубликатов, но при одновременных запросах с одним `externalId` предварительная проверка может пропустить оба.
-
-Шаги по устранению перечислены в разделе [Roadmap](#10-roadmap).
+- [ ] Убрать неиспользуемую зависимость `spring-boot-starter-kafka` из `alerting`.
+- [ ] Унифицировать JPA-конфигурацию: сейчас `@EntityScan`/`@EnableJpaRepositories` дублируются в `JpaConfig` двух модулей и вынесены в `@SpringBootApplication`-класс в `scoring`. Вынести в auto-configuration/`@Import` из `common`.
+- [ ] `@EnableResilientMethods` включён в `scoring`, но `@Retryable`/`@ConcurrencyLimit` нигде не используются — применить или убрать.
+- [ ] Добавить интеграционные тесты на **Testcontainers** (PostgreSQL + Kafka + Redis), контрактные тесты для `TransactionEvent`.
+- [ ] Observability: Actuator, Micrometer + Prometheus, Grafana-дашборды, распределённая трассировка (Micrometer Tracing / OpenTelemetry), структурированные логи с `externalId` в MDC. Actuator сейчас подключён только в `gateway`.
+- [ ] Отключить `spring.jpa.show-sql` вне профиля `dev`; завести профили `dev` / `docker` / `prod`.
+- [ ] CI-пайплайн (GitHub Actions / GitLab CI): `mvn verify`, сборка образов, сканирование зависимостей.
+- [ ] Агрегация Swagger всех сервисов в UI `gateway`.
+- [ ] Закрепить версию образа `kafka-ui` (сейчас `latest`) для воспроизводимости.
+- [ ] Добавить Maven Wrapper (`mvnw`) для воспроизводимой сборки без установленного Maven.
 
 ---
 
-## 10. Roadmap
+<div align="center">
 
-1. **Transactional Outbox** в `ingestion`: запись транзакции и события в одной транзакции БД, публикация отдельным процессом. Убирает dual-write и гонку между фиксацией и чтением события.
-2. **Жизненный цикл ключа идемпотентности**: устанавливать ключ после успешной фиксации либо опираться на состояние в БД (статус отличен от `NEW`), чтобы retry-цепочка выполняла повторную обработку.
-3. **Миграции схемы (Flyway)** вместо `ddl-auto: update` и `validate`, явный порядок применения.
-4. **Атомарное velocity-окно**: Lua-скрипт для `INCR` + `EXPIRE` либо скользящее окно на Redis Sorted Set.
-5. **Интеграционные тесты на Testcontainers**: Kafka, Redis, PostgreSQL; сценарии retry, DLT и дубликатов end-to-end.
-6. **Обработчик DLT** (`@DltHandler`) с метриками и алертингом на накопление сообщений.
-7. **API чтения**: `GET /api/v1/transactions/{id}` (адрес из заголовка `Location`), пагинация и фильтры по статусу, исключение `cardToken` из текста сообщений алертов.
-8. **Наблюдаемость и эксплуатация**: Actuator и Micrometer во всех сервисах, healthcheck-и для прикладных контейнеров, вынос учётных данных из `application.yaml` в переменные окружения, запуск контейнеров не от root.
+**Anti-Fraud Monitor** · Java 21 · Spring Boot 4.1.2 · Kafka · PostgreSQL · Redis
 
----
-
-## 11. Автор
-
-<!-- TODO: указать имя, GitHub и контакт -->
-**[Ваше Имя]**
-
-- GitHub: [github.com/[your-username]](https://github.com/[your-username])
-- Email: [your.email]
-
-> Надёжная система складывается из небольших решений, принятых осознанно и записанных вместе с их ценой.
+</div>
