@@ -13,3 +13,10 @@ spring:
     hibernate:
       ddl-auto: validate
     show-sql: true
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    operations-sorter: method
+    tags-sorter: alpha
