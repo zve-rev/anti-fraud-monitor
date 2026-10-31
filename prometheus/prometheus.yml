@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'ingestion'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['ingestion:8081']
+
+  - job_name: 'alerting'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['alerting:8082']
+
+  - job_name: 'gateway'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['gateway:8080']
