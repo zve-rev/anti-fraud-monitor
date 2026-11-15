@@ -8,4 +8,5 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @EntityScan("com.zverev.entity")
 @EnableJpaRepositories("com.zverev.repository")
 public class JpaConfig {
+
 }

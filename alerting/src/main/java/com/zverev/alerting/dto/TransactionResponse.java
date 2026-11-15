@@ -8,9 +8,11 @@ import com.zverev.entity.enums.TransactionStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 public record TransactionResponse(
         Long id,
+        UUID externalId,
         String cardTokenMasked,
         BigDecimal amount,
         CurrencyCode currency,
@@ -24,6 +26,7 @@ public record TransactionResponse(
     public static TransactionResponse toTransactionResponse(Transaction transaction, String cardTokenMasked) {
         return new TransactionResponse(
                 transaction.getId(),
+                transaction.getExternalId(),
                 cardTokenMasked,
                 transaction.getAmount(),
                 transaction.getCurrencyCode(),

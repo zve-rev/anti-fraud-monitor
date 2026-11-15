@@ -10,15 +10,15 @@ export const options = {
       preAllocatedVUs: 100,
       maxVUs: 500,
       stages: [
-        { duration: '3m', target: 500 },   // разгон до 500 RPS
-        { duration: '11m', target: 500 },  // удержание
-        { duration: '3m', target: 0 },     // спад
+        { duration: '3m', target: 500 },
+        { duration: '11m', target: 500 },
+        { duration: '3m', target: 0 },
       ],
     },
   },
   thresholds: {
-    http_req_duration: ['p(95)<1000'],  // 95% быстрее 1 секунды
-    http_req_failed: ['rate<0.05'],     // ошибок меньше 5% (нагрузочный тест)
+    http_req_duration: ['p(95)<1000'],
+    http_req_failed: ['rate<0.05'],
   },
 };
 

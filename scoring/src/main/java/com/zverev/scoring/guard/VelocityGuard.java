@@ -35,13 +35,17 @@ public class VelocityGuard implements Guard {
             stringRedisTemplate.expire(key, WINDOW);
         }
 
+        String maskedToken = transaction.getCardToken().length() >= 4
+                ? "****" + transaction.getCardToken().substring(transaction.getCardToken().length() - 4)
+                : "****";
+
         if (currentCount > MAX_IN_WINDOW) {
             return Optional.of(
                     new GuardViolation(
                             AlertSeverity.CRITICAL,
                             String.format(
                                     "Velocity exceeded for card %s: %d transactions in last %d minutes",
-                                    transaction.getCardToken(),
+                                    maskedToken,
                                     currentCount,
                                     WINDOW.toMinutes()
                             )

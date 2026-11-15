@@ -20,7 +20,7 @@ public class TransactionQueryService {
 
     @Transactional(readOnly = true)
     public List<TransactionResponse> findAllTransactions() {
-        return transactionRepository.findAll()
+        return transactionRepository.findAllWithAlerts()
                 .stream()
                 .map(transaction -> {
                     String cardToken = transaction.getCardToken();

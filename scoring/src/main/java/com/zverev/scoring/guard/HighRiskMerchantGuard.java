@@ -13,8 +13,11 @@ import java.util.Set;
 public class HighRiskMerchantGuard implements Guard {
 
     private static final Set<String> HIGH_RISK = Set.of(
-            "Casino", "Online Poker", "Crypto Exchange",
-            "Gambling", "Wire Transfer"
+            "Casino",
+            "Online Poker",
+            "Crypto Exchange",
+            "Gambling",
+            "Wire Transfer"
     );
 
     @Override

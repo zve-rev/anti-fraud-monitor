@@ -13,6 +13,11 @@ scrape_configs:
     static_configs:
       - targets: ['alerting:8082']
 
+  - job_name: 'auth'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['auth:8083']
+
   - job_name: 'gateway'
     metrics_path: '/actuator/prometheus'
     static_configs:

@@ -69,6 +69,7 @@ services:
       - KAFKA_CLUSTERS_0_NAME=local-kafka
       - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:29092
 
+  # Порт наружу не публикуем: единственный вход — gateway
   ingestion:
     build:
       context: .
@@ -79,8 +80,6 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
-    ports:
-      - "${INGESTION_PORT:-8081}:8081"
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-antifraud}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-antifraud}
@@ -107,6 +106,7 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
 
+  # Порт наружу не публикуем: единственный вход — gateway
   alerting:
     build:
       context: .
@@ -115,12 +115,24 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    ports:
-      - "${ALERTING_PORT:-8082}:8082"
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-antifraud}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-antifraud}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-antifraud}
+
+  auth:
+    build:
+      context: .
+      dockerfile: auth/Dockerfile
+    container_name: antifraud-auth
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-antifraud}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-antifraud}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-antifraud}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-at-least-32-bytes!!}
 
   gateway:
     build:
@@ -132,11 +144,15 @@ services:
         condition: service_started
       alerting:
         condition: service_started
+      auth:
+        condition: service_started
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
     environment:
       INGESTION_URI: http://ingestion:8081
       ALERTING_URI: http://alerting:8082
+      AUTH_URI: http://auth:8083
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-at-least-32-bytes!!}
 
   prometheus:
     image: prom/prometheus:latest
@@ -155,6 +171,7 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
       - grafana-data:/var/lib/grafana
+
   k6:
     image: grafana/k6:latest
     container_name: antifraud-k6

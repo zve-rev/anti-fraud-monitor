@@ -4,29 +4,34 @@ server:
 spring:
   application:
     name: gateway
-
   cloud:
     gateway:
       server:
         webflux:
           routes:
+            - id: auth-service
+              uri: ${AUTH_URI:http://localhost:8083}
+              predicates:
+                - Path=/api/v1/auth/**
             - id: ingestion-create
               uri: ${INGESTION_URI:http://localhost:8081}
               predicates:
                 - Path=/api/v1/transactions
                 - Method=POST
-
             - id: alerting-transactions
               uri: ${ALERTING_URI:http://localhost:8082}
               predicates:
                 - Path=/api/v1/transactions
                 - Method=GET
-
             - id: alerting-alerts
               uri: ${ALERTING_URI:http://localhost:8082}
               predicates:
                 - Path=/api/v1/alerts
                 - Method=GET
+
+security:
+  jwt:
+    secret: ${JWT_SECRET:dev-only-secret-change-me-at-least-32-bytes!!}
 
 springdoc:
   api-docs:
@@ -34,6 +39,10 @@ springdoc:
   swagger-ui:
     operations-sorter: method
     tags-sorter: alpha
+
+logging:
+  level:
+    com.zverev.gateway: DEBUG
 
 management:
   endpoints:
