@@ -41,6 +41,7 @@ public class Staff {
     @Column(nullable = false, length = 32)
     private StaffRole role;
 
+    @Builder.Default
     @Column(nullable = false)
     private boolean enabled = true;
 }

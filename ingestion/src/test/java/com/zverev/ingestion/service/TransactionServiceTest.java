@@ -1,21 +1,23 @@
 package com.zverev.ingestion.service;
 
-import com.zverev.dto.TransactionEvent;
+import com.zverev.entity.OutboxEvent;
 import com.zverev.entity.Transaction;
 import com.zverev.entity.enums.CurrencyCode;
 import com.zverev.entity.enums.MerchantCountry;
+import com.zverev.entity.enums.OutboxEventStatus;
 import com.zverev.entity.enums.TransactionStatus;
 import com.zverev.ingestion.dto.TransactionRequest;
 import com.zverev.ingestion.exception.TransactionAlreadyExistsException;
-import com.zverev.ingestion.kafka.TransactionEventProducer;
+import com.zverev.repository.OutboxEventRepository;
 import com.zverev.repository.TransactionRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -35,34 +37,49 @@ class TransactionServiceTest {
     private TransactionRepository transactionRepository;
 
     @Mock
-    private TransactionEventProducer eventProducer;
+    private OutboxEventRepository outboxEventRepository;
 
-    @InjectMocks
     private TransactionService transactionService;
 
+    @BeforeEach
+    void setUp() {
+        transactionService = new TransactionService(
+                transactionRepository,
+                outboxEventRepository,
+                JsonMapper.builder().build()
+        );
+    }
+
     @Test
-    @DisplayName("new transaction - saved as NEW and event published")
-    void processNew_savesAndPublishes() {
+    @DisplayName("new transaction - saved as NEW and outbox event persisted")
+    void processNew_savesAndPersistsOutbox() {
         UUID externalId = UUID.randomUUID();
         TransactionRequest request = request(externalId);
 
         when(transactionRepository.existsByExternalId(externalId)).thenReturn(false);
         when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var response = transactionService.process(request);
 
         assertThat(response.status()).isEqualTo(TransactionStatus.NEW);
         verify(transactionRepository).save(any(Transaction.class));
 
-        ArgumentCaptor<TransactionEvent> captor = ArgumentCaptor.forClass(TransactionEvent.class);
-        verify(eventProducer).send(captor.capture());
-        assertThat(captor.getValue().externalId()).isEqualTo(externalId);
-        assertThat(captor.getValue().cardToken()).isEqualTo("card-1");
-        assertThat(captor.getValue().amount()).isEqualByComparingTo(new BigDecimal("100"));
+        ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
+        verify(outboxEventRepository).save(captor.capture());
+
+        OutboxEvent saved = captor.getValue();
+        assertThat(saved.getTopic()).isEqualTo("transactions.raw");
+        assertThat(saved.getMessageKey()).isEqualTo("card-1");
+        assertThat(saved.getEventType()).isEqualTo("TransactionCreated");
+        assertThat(saved.getAggregateId()).isEqualTo(externalId.toString());
+        assertThat(saved.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
+        assertThat(saved.getAttempts()).isZero();
+        assertThat(saved.getPayload()).contains(externalId.toString()).contains("card-1");
     }
 
     @Test
-    @DisplayName("duplicate externalId - exception, no save, no event")
+    @DisplayName("duplicate externalId - exception, no save, no outbox")
     void processDuplicate_throwsException() {
         UUID externalId = UUID.randomUUID();
         TransactionRequest request = request(externalId);
@@ -74,7 +91,7 @@ class TransactionServiceTest {
                 .hasMessageContaining(externalId.toString());
 
         verify(transactionRepository, never()).save(any());
-        verify(eventProducer, never()).send(any());
+        verify(outboxEventRepository, never()).save(any());
     }
 
     private TransactionRequest request(UUID externalId) {

@@ -29,5 +29,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
         """)
     boolean existsByExternalId(@Param("externalId") UUID externalId);
 
+    @Query("SELECT DISTINCT t FROM Transaction t LEFT JOIN FETCH t.alerts WHERE t.id = :id")
+    Optional<Transaction> findByIdWithAlerts(@Param("id") Long id);
+
     Optional<Transaction> findByExternalId(UUID externalId);
 }

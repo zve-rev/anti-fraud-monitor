@@ -8,13 +8,16 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/antifraud}
     username: ${SPRING_DATASOURCE_USERNAME:antifraud}
     password: ${SPRING_DATASOURCE_PASSWORD:antifraud}
+    driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     open-in-view: false
-    properties:
-      hibernate:
-        format_sql: true
+    show-sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
 
 security:
   jwt:

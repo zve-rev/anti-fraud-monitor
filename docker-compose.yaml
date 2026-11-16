@@ -69,7 +69,6 @@ services:
       - KAFKA_CLUSTERS_0_NAME=local-kafka
       - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:29092
 
-  # Порт наружу не публикуем: единственный вход — gateway
   ingestion:
     build:
       context: .
@@ -106,7 +105,6 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
 
-  # Порт наружу не публикуем: единственный вход — gateway
   alerting:
     build:
       context: .

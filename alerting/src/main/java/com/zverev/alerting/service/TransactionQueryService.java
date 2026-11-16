@@ -1,9 +1,12 @@
 package com.zverev.alerting.service;
 
 import com.zverev.alerting.dto.TransactionResponse;
+import com.zverev.entity.Transaction;
 import com.zverev.repository.TransactionRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -28,6 +31,14 @@ public class TransactionQueryService {
                     return toTransactionResponse(transaction, cardTokenMasked);
                 })
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public TransactionResponse findTransactionById(Long id) {
+        Transaction transaction = transactionRepository.findByIdWithAlerts(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "transaction not found"));
+        String cardTokenMasked = maskCard(transaction.getCardToken());
+        return toTransactionResponse(transaction, cardTokenMasked);
     }
 
     private String maskCard(String cardToken) {

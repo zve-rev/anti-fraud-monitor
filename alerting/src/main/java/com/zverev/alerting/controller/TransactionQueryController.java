@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -45,5 +46,15 @@ public class TransactionQueryController {
     @GetMapping
     public List<TransactionResponse> listAllTransactions() {
         return transactionQueryService.findAllTransactions();
+    }
+
+    @Operation(summary = "Получить транзакцию по ID", description = "Возвращает детальную информацию о транзакции и её алертах.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Транзакция найдена", content = @Content(schema = @Schema(implementation = TransactionResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Транзакция не найдена")
+    })
+    @GetMapping("/{id}")
+    public TransactionResponse getTransactionById(@PathVariable Long id) {
+        return transactionQueryService.findTransactionById(id);
     }
 }

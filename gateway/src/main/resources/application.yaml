@@ -21,7 +21,7 @@ spring:
             - id: alerting-transactions
               uri: ${ALERTING_URI:http://localhost:8082}
               predicates:
-                - Path=/api/v1/transactions
+                - Path=/api/v1/transactions, /api/v1/transactions/{id}
                 - Method=GET
             - id: alerting-alerts
               uri: ${ALERTING_URI:http://localhost:8082}
