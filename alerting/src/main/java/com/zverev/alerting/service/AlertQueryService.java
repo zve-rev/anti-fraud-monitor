@@ -15,7 +15,8 @@ public class AlertQueryService {
     private final AlertRepository alertRepository;
 
     @Transactional(readOnly = true)
-    public Page<AlertResponse> findAlerts(Pageable pageable) {
-        return alertRepository.findAll(pageable).map(AlertResponse::toAlertResponse);
+    public Page<AlertResponse> findAllAlerts(Pageable pageable) {
+        return alertRepository.findAll(pageable)
+                .map(AlertResponse::toAlertResponse);
     }
 }

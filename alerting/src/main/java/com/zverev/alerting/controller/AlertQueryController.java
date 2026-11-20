@@ -19,8 +19,8 @@ public class AlertQueryController {
     private final AlertQueryService alertQueryService;
 
     @GetMapping
-    public Page<AlertResponse> listAlerts(
+    public Page<AlertResponse> listAllAlerts(
             @PageableDefault(size = 20, sort = {"createdAt", "id"}, direction = Sort.Direction.DESC) Pageable pageable) {
-        return alertQueryService.findAlerts(pageable);
+        return alertQueryService.findAllAlerts(pageable);
     }
 }

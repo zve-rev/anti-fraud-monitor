@@ -1,6 +1,7 @@
 package com.zverev.scoring.kafka;
 
 import com.zverev.dto.TransactionEvent;
+import com.zverev.entity.Alert;
 import com.zverev.entity.Transaction;
 import com.zverev.entity.enums.TransactionStatus;
 import com.zverev.exception.TransactionNotFoundException;
@@ -19,12 +20,13 @@ import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class TransactionEventConsumer {
+public class KafkaConsumer {
 
     private final TransactionRepository transactionRepository;
     private final AlertFilter alertFilter;
@@ -47,12 +49,13 @@ public class TransactionEventConsumer {
         }
 
         alertFilter.filter(transaction);
-        TransactionStatus status = transactionStatusResolver.resolve(transaction.getAlerts());
+
+        List<Alert> alerts = transaction.getAlerts();
+        TransactionStatus status = transactionStatusResolver.resolve(alerts);
         transaction.setStatus(status);
 
         meterRegistry.counter("antifraud.transactions.processed", "status", status.name()).increment();
-        transaction.getAlerts().forEach(alert ->
-                meterRegistry.counter("antifraud.alerts.created", "rule", alert.getRule().name()).increment());
+        alerts.forEach(alert -> meterRegistry.counter("antifraud.alerts.created", "rule", alert.getRule().name()).increment());
 
         log.info("Transaction processed: externalId={}, status={}", externalId, status);
     }

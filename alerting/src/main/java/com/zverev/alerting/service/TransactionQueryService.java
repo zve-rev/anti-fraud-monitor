@@ -21,7 +21,7 @@ public class TransactionQueryService {
     private final TransactionRepository transactionRepository;
 
     @Transactional(readOnly = true)
-    public Page<TransactionResponse> findTransactions(TransactionStatus status, Pageable pageable) {
+    public Page<TransactionResponse> findAllTransactions(TransactionStatus status, Pageable pageable) {
         Page<Transaction> page = (status == null)
                 ? transactionRepository.findAll(pageable)
                 : transactionRepository.findByStatus(status, pageable);

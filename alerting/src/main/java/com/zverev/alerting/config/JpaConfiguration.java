@@ -9,6 +9,6 @@ import org.springframework.data.web.config.EnableSpringDataWebSupport;
 @EntityScan("com.zverev.entity")
 @EnableJpaRepositories("com.zverev.repository")
 @EnableSpringDataWebSupport(pageSerializationMode = EnableSpringDataWebSupport.PageSerializationMode.VIA_DTO)
-public class JpaConfig {
+public class JpaConfiguration {
 
 }

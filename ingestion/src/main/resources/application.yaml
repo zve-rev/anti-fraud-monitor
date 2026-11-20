@@ -45,3 +45,10 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+
+kafka:
+  max-attempts: 5
+
+outbox:
+  batch-size: 50
+  poll-interval-ms: 1000

@@ -1,10 +1,11 @@
 package com.zverev.ingestion.outbox;
 
 import com.zverev.entity.OutboxEvent;
-import com.zverev.entity.enums.OutboxEventStatus;
+import com.zverev.ingestion.kafka.KafkaProducer;
 import com.zverev.repository.OutboxEventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -14,18 +15,17 @@ import java.util.List;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class OutboxEventPublisher {
+public class OutboxEventPoller {
 
-    private static final int BATCH_SIZE = 50;
-    private static final long OUTBOX_POLL_INTERVAL_MS = 1000;
+    @Value("${outbox.batch-size}")
+    private int batchSize;
 
     private final OutboxEventRepository outboxEventRepository;
-    private final OutboxEventSender outboxEventSender;
+    private final KafkaProducer kafkaProducer;
 
-    @Scheduled(fixedDelay = OUTBOX_POLL_INTERVAL_MS)
+    @Scheduled(fixedDelayString = "${outbox.poll-interval-ms}")
     public void publishPendingEvents() {
-        List<OutboxEvent> pending = outboxEventRepository
-                .findPending(OutboxEventStatus.PENDING, PageRequest.of(0, BATCH_SIZE));
+        List<OutboxEvent> pending = outboxEventRepository.findPendingEvents(PageRequest.of(0, batchSize));
 
         if (pending.isEmpty()) {
             return;
@@ -33,7 +33,7 @@ public class OutboxEventPublisher {
 
         log.debug("Publishing {} outbox events", pending.size());
         for (OutboxEvent event : pending) {
-            outboxEventSender.send(event);
+            kafkaProducer.send(event);
         }
     }
 }

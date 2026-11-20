@@ -22,10 +22,10 @@ public class TransactionQueryController {
     private final TransactionQueryService transactionQueryService;
 
     @GetMapping
-    public Page<TransactionResponse> listTransactions(
+    public Page<TransactionResponse> listAllTransactions(
             @RequestParam(required = false) TransactionStatus status,
             @PageableDefault(size = 20, sort = {"createdAt", "id"}, direction = Sort.Direction.DESC) Pageable pageable) {
-        return transactionQueryService.findTransactions(status, pageable);
+        return transactionQueryService.findAllTransactions(status, pageable);
     }
 
     @GetMapping("/{id}")

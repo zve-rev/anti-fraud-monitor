@@ -70,7 +70,7 @@ class TransactionQueryServiceTest {
         when(transactionRepository.findAll(pageable))
                 .thenReturn(new PageImpl<>(List.of(transaction("card-1234"))));
 
-        Page<TransactionResponse> result = service.findTransactions(null, pageable);
+        Page<TransactionResponse> result = service.findAllTransactions(null, pageable);
 
         assertThat(result.getContent()).hasSize(1);
         verify(transactionRepository, never()).findByStatus(any(), any());
@@ -83,7 +83,7 @@ class TransactionQueryServiceTest {
         when(transactionRepository.findByStatus(TransactionStatus.REVIEW, pageable))
                 .thenReturn(new PageImpl<>(List.of(transaction("card-1234"))));
 
-        Page<TransactionResponse> result = service.findTransactions(TransactionStatus.REVIEW, pageable);
+        Page<TransactionResponse> result = service.findAllTransactions(TransactionStatus.REVIEW, pageable);
 
         assertThat(result.getContent()).hasSize(1);
         verify(transactionRepository, never()).findAll(any(Pageable.class));

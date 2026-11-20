@@ -35,7 +35,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class TransactionEventConsumerTest {
+class KafkaConsumerTest {
 
     @Mock
     private TransactionRepository transactionRepository;
@@ -43,11 +43,11 @@ class TransactionEventConsumerTest {
     @Mock
     private AlertFilter alertFilter;
 
-    private TransactionEventConsumer consumer;
+    private KafkaConsumer consumer;
 
     @BeforeEach
     void setUp() {
-        consumer = new TransactionEventConsumer(
+        consumer = new KafkaConsumer(
                 transactionRepository, alertFilter, new TransactionStatusResolver(), new SimpleMeterRegistry());
     }
 

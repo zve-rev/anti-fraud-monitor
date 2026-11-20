@@ -2,6 +2,7 @@ package com.zverev.ingestion.outbox;
 
 import com.zverev.entity.OutboxEvent;
 import com.zverev.entity.enums.OutboxEventStatus;
+import com.zverev.ingestion.kafka.KafkaProducer;
 import com.zverev.repository.OutboxEventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -21,7 +22,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class OutboxEventSenderTest {
+class KafkaProducerTest {
 
     @Mock
     private OutboxEventRepository outboxEventRepository;
@@ -29,11 +30,11 @@ class OutboxEventSenderTest {
     @Mock
     private KafkaTemplate<String, String> kafkaTemplate;
 
-    private OutboxEventSender sender;
+    private KafkaProducer sender;
 
     @BeforeEach
     void setUp() {
-        sender = new OutboxEventSender(outboxEventRepository, kafkaTemplate);
+        sender = new KafkaProducer(outboxEventRepository, kafkaTemplate);
     }
 
     @Test
@@ -44,7 +45,7 @@ class OutboxEventSenderTest {
 
         sender.send(event(0));
 
-        verify(outboxEventRepository).markProcessed(any(), eq(OutboxEventStatus.SENT), any(Instant.class));
+        verify(outboxEventRepository).updateEvent(any(), eq(OutboxEventStatus.SENT), any(Instant.class));
     }
 
     @Test
@@ -55,7 +56,7 @@ class OutboxEventSenderTest {
 
         sender.send(event(0));
 
-        verify(outboxEventRepository).markProcessed(any(), eq(OutboxEventStatus.PENDING), any(Instant.class));
+        verify(outboxEventRepository).updateEvent(any(), eq(OutboxEventStatus.PENDING), any(Instant.class));
     }
 
     @Test
@@ -66,7 +67,7 @@ class OutboxEventSenderTest {
 
         sender.send(event(4));
 
-        verify(outboxEventRepository).markProcessed(any(), eq(OutboxEventStatus.FAILED), any(Instant.class));
+        verify(outboxEventRepository).updateEvent(any(), eq(OutboxEventStatus.FAILED), any(Instant.class));
     }
 
     private OutboxEvent event(int attempts) {
