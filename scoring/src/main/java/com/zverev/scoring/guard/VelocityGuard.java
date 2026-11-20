@@ -4,8 +4,10 @@ import com.zverev.entity.Transaction;
 import com.zverev.entity.enums.AlertSeverity;
 import com.zverev.entity.enums.Rule;
 import com.zverev.scoring.dto.GuardViolation;
+import com.zverev.util.CardMasker;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -24,20 +26,22 @@ public class VelocityGuard implements Guard {
     @Override
     public Optional<GuardViolation> evaluate(Transaction transaction) {
         String key = REDIS_KEY_PREFIX + transaction.getCardToken();
+        String member = transaction.getExternalId().toString();
+        long now = System.currentTimeMillis();
 
-        Long currentCount = stringRedisTemplate.opsForValue().increment(key);
+        ZSetOperations<String, String> zSet = stringRedisTemplate.opsForZSet();
+        zSet.removeRangeByScore(key, 0, now - WINDOW.toMillis());
+        zSet.add(key, member, now);
+
+        stringRedisTemplate.expire(key, WINDOW);
+
+        Long currentCount = zSet.size(key);
 
         if (currentCount == null) {
             return Optional.empty();
         }
 
-        if (currentCount == 1L) {
-            stringRedisTemplate.expire(key, WINDOW);
-        }
-
-        String maskedToken = transaction.getCardToken().length() >= 4
-                ? "****" + transaction.getCardToken().substring(transaction.getCardToken().length() - 4)
-                : "****";
+        String maskedToken = CardMasker.mask(transaction.getCardToken());
 
         if (currentCount > MAX_IN_WINDOW) {
             return Optional.of(

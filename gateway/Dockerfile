@@ -8,14 +8,23 @@ COPY ingestion/pom.xml ingestion/
 COPY scoring/pom.xml scoring/
 COPY alerting/pom.xml alerting/
 COPY gateway/pom.xml gateway/
+
 RUN mvn -B -q dependency:go-offline -pl gateway -am
 
 COPY common common/
 COPY gateway gateway/
+
 RUN mvn -B -q clean package -pl gateway -am -DskipTests
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /app/gateway/target/gateway-0.0.1-SNAPSHOT.jar app.jar
+
 EXPOSE 8080
+
 ENTRYPOINT ["java", "-jar", "app.jar"]

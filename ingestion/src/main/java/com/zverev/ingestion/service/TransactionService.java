@@ -8,7 +8,8 @@ import com.zverev.ingestion.dto.TransactionRequest;
 import com.zverev.ingestion.exception.TransactionAlreadyExistsException;
 import com.zverev.repository.OutboxEventRepository;
 import com.zverev.repository.TransactionRepository;
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
@@ -17,7 +18,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Service
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class TransactionService {
 
     private static final String TOPIC = "transactions.raw";
@@ -30,6 +31,7 @@ public class TransactionService {
     @Transactional
     public TransactionCreatedResponse process(TransactionRequest request) {
         UUID externalId = request.externalId();
+
         if (transactionRepository.existsByExternalId(externalId)) {
             throw new TransactionAlreadyExistsException(externalId);
         }
@@ -45,7 +47,12 @@ public class TransactionService {
                 .createdAt(Instant.now())
                 .build();
 
-        Transaction saved = transactionRepository.save(transaction);
+        Transaction saved;
+        try {
+            saved = transactionRepository.save(transaction);
+        } catch (DataIntegrityViolationException e) {
+            throw new TransactionAlreadyExistsException(externalId);
+        }
 
         TransactionEvent event = new TransactionEvent(
                 saved.getExternalId(),
@@ -64,6 +71,7 @@ public class TransactionService {
                 TOPIC,
                 saved.getCardToken()
         );
+
         outboxEventRepository.save(outboxEvent);
 
         return new TransactionCreatedResponse(saved.getId(), saved.getStatus());

@@ -1,21 +1,19 @@
-package com.zverev.scoring.service;
+package com.zverev.scoring.util;
 
 import com.zverev.entity.Alert;
 import com.zverev.entity.Transaction;
 import com.zverev.scoring.guard.Guard;
-import org.springframework.stereotype.Service;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.List;
 
-@Service
-public class GuardFilterService {
+@Component
+@RequiredArgsConstructor
+public class AlertFilter {
 
     private final List<Guard> guards;
-
-    public GuardFilterService(List<Guard> guards) {
-        this.guards = guards;
-    }
 
     public void filter(Transaction transaction) {
         guards.forEach(guard -> guard.evaluate(transaction)

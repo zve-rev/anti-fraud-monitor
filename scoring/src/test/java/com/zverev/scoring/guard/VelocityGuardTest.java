@@ -11,7 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.ZSetOperations;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -20,53 +20,44 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class VelocityGuardTest {
 
+    private static final String KEY = "velocity:card:card-1";
+
     @Mock
     private StringRedisTemplate redisTemplate;
 
     @Mock
-    private ValueOperations<String, String> valueOps;
+    private ZSetOperations<String, String> zSetOps;
 
     private VelocityGuard guard;
 
     @BeforeEach
     void setUp() {
         guard = new VelocityGuard(redisTemplate);
-        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(redisTemplate.opsForZSet()).thenReturn(zSetOps);
     }
 
     @Test
-    @DisplayName("first transaction in window - sets TTL, no violation")
-    void firstTransaction_setsTtl() {
-        when(valueOps.increment("velocity:card:card-1")).thenReturn(1L);
+    @DisplayName("5 transactions in window - no violation")
+    void fiveInWindow_empty() {
+        when(zSetOps.size(KEY)).thenReturn(5L);
 
-        assertThat(guard.evaluate(tx("card-1"))).isEmpty();
-        verify(redisTemplate).expire(eq("velocity:card:card-1"), any(Duration.class));
+        assertThat(guard.evaluate(tx())).isEmpty();
     }
 
     @Test
-    @DisplayName("5th transaction - no violation, TTL not reset")
-    void fifthTransaction_noViolation() {
-        when(valueOps.increment("velocity:card:card-1")).thenReturn(5L);
+    @DisplayName("6 transactions in window - CRITICAL violation")
+    void sixInWindow_violation() {
+        when(zSetOps.size(KEY)).thenReturn(6L);
 
-        assertThat(guard.evaluate(tx("card-1"))).isEmpty();
-        verify(redisTemplate, never()).expire(anyString(), any(Duration.class));
-    }
-
-    @Test
-    @DisplayName("6th transaction - violation CRITICAL")
-    void sixthTransaction_violation() {
-        when(valueOps.increment("velocity:card:card-1")).thenReturn(6L);
-
-        var result = guard.evaluate(tx("card-1"));
+        var result = guard.evaluate(tx());
 
         assertThat(result).isPresent();
         assertThat(result.get().severity()).isEqualTo(AlertSeverity.CRITICAL);
@@ -74,23 +65,36 @@ class VelocityGuardTest {
     }
 
     @Test
-    @DisplayName("null from Redis - fail-open, no violation")
-    void nullFromRedis_failOpen() {
-        when(valueOps.increment("velocity:card:card-1")).thenReturn(null);
+    @DisplayName("transaction is registered by externalId and ttl is refreshed")
+    void registersTransactionAndRefreshesTtl() {
+        when(zSetOps.size(KEY)).thenReturn(1L);
+        Transaction tx = tx();
 
-        assertThat(guard.evaluate(tx("card-1"))).isEmpty();
+        guard.evaluate(tx);
+
+        verify(zSetOps).removeRangeByScore(eq(KEY), anyDouble(), anyDouble());
+        verify(zSetOps).add(eq(KEY), eq(tx.getExternalId().toString()), anyDouble());
+        verify(redisTemplate).expire(eq(KEY), any(Duration.class));
     }
 
-    private Transaction tx(String cardToken) {
+    @Test
+    @DisplayName("null size from redis - no violation")
+    void nullSize_empty() {
+        when(zSetOps.size(KEY)).thenReturn(null);
+
+        assertThat(guard.evaluate(tx())).isEmpty();
+    }
+
+    private Transaction tx() {
         return Transaction.builder()
+                .externalId(UUID.randomUUID())
+                .cardToken("card-1")
                 .amount(new BigDecimal("100"))
                 .currencyCode(CurrencyCode.EUR)
-                .cardToken(cardToken)
                 .merchantName("Shop")
                 .merchantCountry(MerchantCountry.GERMANY)
                 .occurredAt(Instant.now())
                 .createdAt(Instant.now())
-                .externalId(UUID.randomUUID())
                 .build();
     }
 }

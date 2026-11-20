@@ -58,7 +58,7 @@ services:
       retries: 15
 
   kafka-ui:
-    image: ghcr.io/kafbat/kafka-ui:latest
+    image: ghcr.io/kafbat/kafka-ui:v1.2.0
     container_name: antifraud-kafka-ui
     depends_on:
       kafka:
@@ -84,6 +84,13 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-antifraud}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-antifraud}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/actuator/health/readiness"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 60s
 
   scoring:
     build:
@@ -104,6 +111,13 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8084/actuator/health/readiness"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 60s
 
   alerting:
     build:
@@ -117,6 +131,13 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-antifraud}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-antifraud}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-antifraud}
+      MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8082/actuator/health/readiness"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 60s
 
   auth:
     build:
@@ -130,7 +151,15 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-antifraud}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-antifraud}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-antifraud}
-      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-at-least-32-bytes!!}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      SPRING_PROFILES_ACTIVE: dev
+      MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8083/actuator/health/readiness"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 60s
 
   gateway:
     build:
@@ -139,21 +168,28 @@ services:
     container_name: antifraud-gateway
     depends_on:
       ingestion:
-        condition: service_started
+        condition: service_healthy
       alerting:
-        condition: service_started
+        condition: service_healthy
       auth:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
     environment:
       INGESTION_URI: http://ingestion:8081
       ALERTING_URI: http://alerting:8082
       AUTH_URI: http://auth:8083
-      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-at-least-32-bytes!!}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8091/actuator/health/readiness"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 60s
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.5.0
     container_name: antifraud-prometheus
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
@@ -161,24 +197,27 @@ services:
       - "9090:9090"
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:12.0.2
     container_name: antifraud-grafana
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
 
   k6:
-    image: grafana/k6:latest
+    image: grafana/k6:1.1.0
     container_name: antifraud-k6
-    profiles: [ "loadtest" ]
+    profiles: ["loadtest"]
     volumes:
       - ./k6:/scripts
     command: run /scripts/load-test.js --summary-export=/scripts/summary.json
     depends_on:
-      - gateway
+      gateway:
+        condition: service_healthy
 
 volumes:
   pgdata:

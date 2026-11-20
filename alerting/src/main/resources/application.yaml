@@ -4,6 +4,13 @@ server:
 spring:
   application:
     name: alerting-service
+  mvc:
+    problemdetails:
+      enabled: true
+  data:
+    web:
+      pageable:
+        max-page-size: 100
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/antifraud}
     username: ${SPRING_DATASOURCE_USERNAME:antifraud}

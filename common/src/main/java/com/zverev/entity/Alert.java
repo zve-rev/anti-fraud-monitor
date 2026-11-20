@@ -23,7 +23,7 @@ import java.time.Instant;
 @Entity
 @Table(name = "alerts")
 @Getter
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Alert {
 
     @Id

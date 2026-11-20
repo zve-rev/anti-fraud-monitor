@@ -17,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.math.BigDecimal;
@@ -79,18 +80,18 @@ class TransactionServiceTest {
     }
 
     @Test
-    @DisplayName("duplicate externalId - exception, no save, no outbox")
-    void processDuplicate_throwsException() {
+    @DisplayName("unique constraint violation on save - TransactionAlreadyExistsException, no outbox")
+    void processRace_throwsException() {
         UUID externalId = UUID.randomUUID();
         TransactionRequest request = request(externalId);
 
-        when(transactionRepository.existsByExternalId(externalId)).thenReturn(true);
+        when(transactionRepository.existsByExternalId(externalId)).thenReturn(false);
+        when(transactionRepository.save(any())).thenThrow(new DataIntegrityViolationException("duplicate"));
 
         assertThatThrownBy(() -> transactionService.process(request))
                 .isInstanceOf(TransactionAlreadyExistsException.class)
                 .hasMessageContaining(externalId.toString());
 
-        verify(transactionRepository, never()).save(any());
         verify(outboxEventRepository, never()).save(any());
     }
 

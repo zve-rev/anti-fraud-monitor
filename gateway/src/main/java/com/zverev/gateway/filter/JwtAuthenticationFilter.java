@@ -66,8 +66,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         if (path.equals("/api/v1/auth/login")) {
             return true;
         }
-        return path.startsWith("/actuator")
-                || path.startsWith("/v3/api-docs")
+        return path.startsWith("/v3/api-docs")
                 || path.startsWith("/swagger-ui")
                 || path.startsWith("/webjars");
     }

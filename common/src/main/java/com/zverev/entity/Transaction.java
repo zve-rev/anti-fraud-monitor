@@ -18,6 +18,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.BatchSize;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -66,6 +67,7 @@ public class Transaction {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @BatchSize(size = 50)
     @OneToMany(mappedBy = "transaction", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Alert> alerts = new ArrayList<>();
 

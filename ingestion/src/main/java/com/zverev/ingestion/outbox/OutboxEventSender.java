@@ -17,6 +17,8 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class OutboxEventSender {
 
+    private static final int MAX_ATTEMPTS = 5;
+
     private final OutboxEventRepository outboxEventRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
 
@@ -27,8 +29,11 @@ public class OutboxEventSender {
                     .get(10, TimeUnit.SECONDS);
             outboxEventRepository.markProcessed(event.getId(), OutboxEventStatus.SENT, Instant.now());
         } catch (Exception e) {
-            log.error("Failed to publish outbox event {}: {}", event.getId(), e.getMessage());
-            outboxEventRepository.markProcessed(event.getId(), OutboxEventStatus.FAILED, Instant.now());
+            boolean giveUp = event.getAttempts() + 1 >= MAX_ATTEMPTS;
+            OutboxEventStatus next = giveUp ? OutboxEventStatus.FAILED : OutboxEventStatus.PENDING;
+            log.warn("Failed to publish outbox event {} (attempt {}): {}",
+                    event.getId(), event.getAttempts() + 1, e.getMessage());
+            outboxEventRepository.markProcessed(event.getId(), next, Instant.now());
         }
     }
 }

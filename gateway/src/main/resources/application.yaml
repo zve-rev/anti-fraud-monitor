@@ -31,7 +31,7 @@ spring:
 
 security:
   jwt:
-    secret: ${JWT_SECRET:dev-only-secret-change-me-at-least-32-bytes!!}
+    secret: ${JWT_SECRET}
 
 springdoc:
   api-docs:
@@ -45,10 +45,12 @@ logging:
     com.zverev.gateway: DEBUG
 
 management:
+  server:
+    port: 8091
   endpoints:
     web:
       exposure:
-        include: health,info,gateway,metrics,prometheus
+        include: health,info,prometheus
   endpoint:
     prometheus:
       enabled: true

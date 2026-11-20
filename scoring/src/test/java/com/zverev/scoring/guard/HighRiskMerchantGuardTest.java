@@ -1,6 +1,7 @@
 package com.zverev.scoring.guard;
 
 import com.zverev.entity.Transaction;
+import com.zverev.entity.enums.AlertSeverity;
 import com.zverev.entity.enums.CurrencyCode;
 import com.zverev.entity.enums.MerchantCountry;
 import org.junit.jupiter.api.DisplayName;
@@ -18,35 +19,36 @@ class HighRiskMerchantGuardTest {
 
     @Test
     @DisplayName("regular merchant - no violation")
-    void regularMerchant_returnsEmpty() {
+    void regular_empty() {
         assertThat(guard.evaluate(tx("Coffee Shop"))).isEmpty();
     }
 
     @Test
-    @DisplayName("casino - violation HIGH")
-    void casino_returnsViolation() {
+    @DisplayName("casino - HIGH violation")
+    void casino_violation() {
         var result = guard.evaluate(tx("Casino"));
 
         assertThat(result).isPresent();
+        assertThat(result.get().severity()).isEqualTo(AlertSeverity.HIGH);
         assertThat(result.get().message()).contains("Casino");
     }
 
     @Test
-    @DisplayName("case-sensitive: 'casino' lowercase - no violation")
-    void lowercaseCasino_returnsEmpty() {
+    @DisplayName("lowercase name - no violation, match is case sensitive")
+    void lowercase_empty() {
         assertThat(guard.evaluate(tx("casino"))).isEmpty();
     }
 
     private Transaction tx(String merchant) {
         return Transaction.builder()
+                .externalId(UUID.randomUUID())
+                .cardToken("card-1")
                 .amount(new BigDecimal("100"))
                 .currencyCode(CurrencyCode.EUR)
-                .cardToken("card-1")
                 .merchantName(merchant)
                 .merchantCountry(MerchantCountry.GERMANY)
                 .occurredAt(Instant.now())
                 .createdAt(Instant.now())
-                .externalId(UUID.randomUUID())
                 .build();
     }
 }

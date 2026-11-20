@@ -3,22 +3,24 @@ package com.zverev.scoring.kafka;
 import com.zverev.dto.TransactionEvent;
 import com.zverev.entity.Alert;
 import com.zverev.entity.Transaction;
-import com.zverev.entity.enums.*;
+import com.zverev.entity.enums.AlertSeverity;
+import com.zverev.entity.enums.CurrencyCode;
+import com.zverev.entity.enums.MerchantCountry;
+import com.zverev.entity.enums.Rule;
+import com.zverev.entity.enums.TransactionStatus;
 import com.zverev.exception.TransactionNotFoundException;
 import com.zverev.repository.TransactionRepository;
-import com.zverev.scoring.service.GuardFilterService;
+import com.zverev.scoring.util.AlertFilter;
+import com.zverev.scoring.util.TransactionStatusResolver;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
 
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -26,9 +28,11 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class TransactionEventConsumerTest {
@@ -37,116 +41,87 @@ class TransactionEventConsumerTest {
     private TransactionRepository transactionRepository;
 
     @Mock
-    private GuardFilterService guardFilterService;
-
-    @Mock
-    private StringRedisTemplate redisTemplate;
-
-    @Mock
-    private ValueOperations<String, String> valueOps;
+    private AlertFilter alertFilter;
 
     private TransactionEventConsumer consumer;
 
     @BeforeEach
     void setUp() {
-        consumer = new TransactionEventConsumer(transactionRepository, guardFilterService, redisTemplate);
+        consumer = new TransactionEventConsumer(
+                transactionRepository, alertFilter, new TransactionStatusResolver(), new SimpleMeterRegistry());
     }
 
     @Test
-    @DisplayName("first event, no violations - saved as APPROVED")
-    void firstEventNoViolations_approved() {
-        UUID externalId = UUID.randomUUID();
-        TransactionEvent event = event(externalId);
-        Transaction tx = transaction(externalId);
+    @DisplayName("new event, no alerts - status APPROVED")
+    void noAlerts_approved() {
+        UUID id = UUID.randomUUID();
+        Transaction tx = transaction(id);
+        when(transactionRepository.findByExternalId(id)).thenReturn(Optional.of(tx));
 
-        when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        when(valueOps.setIfAbsent(anyString(), eq("1"), eq(Duration.ofHours(24)))).thenReturn(true);
-        when(transactionRepository.findByExternalId(externalId)).thenReturn(Optional.of(tx));
+        consumer.consume(event(id));
 
-        consumer.consume(event);
-
-        ArgumentCaptor<Transaction> captor = ArgumentCaptor.forClass(Transaction.class);
-        verify(transactionRepository).save(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo(TransactionStatus.APPROVED);
-        verify(guardFilterService).filter(tx);
+        assertThat(tx.getStatus()).isEqualTo(TransactionStatus.APPROVED);
+        verify(alertFilter).filter(tx);
     }
 
     @Test
-    @DisplayName("critical alert - saved as DECLINED")
+    @DisplayName("critical alert - status DECLINED")
     void criticalAlert_declined() {
-        UUID externalId = UUID.randomUUID();
-        TransactionEvent event = event(externalId);
-        Transaction tx = transaction(externalId);
-
-        when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        when(valueOps.setIfAbsent(anyString(), eq("1"), eq(Duration.ofHours(24)))).thenReturn(true);
-        when(transactionRepository.findByExternalId(externalId)).thenReturn(Optional.of(tx));
+        UUID id = UUID.randomUUID();
+        Transaction tx = transaction(id);
+        when(transactionRepository.findByExternalId(id)).thenReturn(Optional.of(tx));
         doAnswer(inv -> {
             tx.addAlert(new Alert(Rule.VELOCITY, AlertSeverity.CRITICAL, "velocity", Instant.now()));
             return null;
-        }).when(guardFilterService).filter(tx);
+        }).when(alertFilter).filter(tx);
 
-        consumer.consume(event);
+        consumer.consume(event(id));
 
-        ArgumentCaptor<Transaction> captor = ArgumentCaptor.forClass(Transaction.class);
-        verify(transactionRepository).save(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo(TransactionStatus.DECLINED);
+        assertThat(tx.getStatus()).isEqualTo(TransactionStatus.DECLINED);
     }
 
     @Test
-    @DisplayName("high alert (non-critical) - saved as REVIEW")
-    void highAlert_review() {
-        UUID externalId = UUID.randomUUID();
-        TransactionEvent event = event(externalId);
-        Transaction tx = transaction(externalId);
+    @DisplayName("already processed event - skipped, status unchanged")
+    void alreadyProcessed_skipped() {
+        UUID id = UUID.randomUUID();
+        Transaction tx = transaction(id);
+        tx.setStatus(TransactionStatus.APPROVED);
+        when(transactionRepository.findByExternalId(id)).thenReturn(Optional.of(tx));
 
-        when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        when(valueOps.setIfAbsent(anyString(), eq("1"), eq(Duration.ofHours(24)))).thenReturn(true);
-        when(transactionRepository.findByExternalId(externalId)).thenReturn(Optional.of(tx));
-        doAnswer(inv -> {
-            tx.addAlert(new Alert(Rule.HIGH_RISK_MERCHANT, AlertSeverity.HIGH, "merchant", Instant.now()));
-            return null;
-        }).when(guardFilterService).filter(tx);
+        consumer.consume(event(id));
 
-        consumer.consume(event);
-
-        ArgumentCaptor<Transaction> captor = ArgumentCaptor.forClass(Transaction.class);
-        verify(transactionRepository).save(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo(TransactionStatus.REVIEW);
+        verify(alertFilter, never()).filter(any());
+        assertThat(tx.getStatus()).isEqualTo(TransactionStatus.APPROVED);
     }
 
     @Test
-    @DisplayName("duplicate event - skipped, no save, no filter")
-    void duplicateEvent_skipped() {
-        UUID externalId = UUID.randomUUID();
-        TransactionEvent event = event(externalId);
+    @DisplayName("transaction not found - exception, so Kafka retries later")
+    void notFound_throws() {
+        UUID id = UUID.randomUUID();
+        when(transactionRepository.findByExternalId(id)).thenReturn(Optional.empty());
 
-        when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        when(valueOps.setIfAbsent(anyString(), eq("1"), eq(Duration.ofHours(24)))).thenReturn(false);
-
-        consumer.consume(event);
-
-        verify(transactionRepository, never()).findByExternalId(any());
-        verify(transactionRepository, never()).save(any());
-        verify(guardFilterService, never()).filter(any());
-    }
-
-    @Test
-    @DisplayName("transaction not found - TransactionNotFoundException")
-    void notFound_throwsException() {
-        UUID externalId = UUID.randomUUID();
-        TransactionEvent event = event(externalId);
-
-        when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        when(valueOps.setIfAbsent(anyString(), eq("1"), eq(Duration.ofHours(24)))).thenReturn(true);
-        when(transactionRepository.findByExternalId(externalId)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> consumer.consume(event))
+        assertThatThrownBy(() -> consumer.consume(event(id)))
                 .isInstanceOf(TransactionNotFoundException.class)
-                .hasMessageContaining(externalId.toString());
+                .hasMessageContaining(id.toString());
 
-        verify(transactionRepository, never()).save(any());
-        verify(guardFilterService, never()).filter(any());
+        verify(alertFilter, never()).filter(any());
+    }
+
+    @Test
+    @DisplayName("first attempt fails, retry succeeds - event is not lost")
+    void failureThenRetry_processed() {
+        UUID id = UUID.randomUUID();
+        Transaction tx = transaction(id);
+        when(transactionRepository.findByExternalId(id)).thenReturn(Optional.of(tx));
+        doThrow(new RuntimeException("redis down")).doNothing().when(alertFilter).filter(tx);
+
+        assertThatThrownBy(() -> consumer.consume(event(id)))
+                .isInstanceOf(RuntimeException.class);
+        assertThat(tx.getStatus()).isEqualTo(TransactionStatus.NEW);
+
+        consumer.consume(event(id));
+
+        assertThat(tx.getStatus()).isEqualTo(TransactionStatus.APPROVED);
     }
 
     private TransactionEvent event(UUID externalId) {

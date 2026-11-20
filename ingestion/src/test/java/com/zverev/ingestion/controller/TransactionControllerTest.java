@@ -113,7 +113,7 @@ class TransactionControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.error").value("duplicate_transaction"))
+                .andExpect(jsonPath("$.title").value("Duplicate transaction"))
                 .andExpect(jsonPath("$.externalId").value(externalId.toString()));
     }
 }
