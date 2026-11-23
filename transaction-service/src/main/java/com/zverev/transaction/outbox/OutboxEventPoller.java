@@ -20,7 +20,10 @@ public class OutboxEventPoller {
     private final KafkaProducer kafkaProducer;
 
     @Transactional
-    @Scheduled(fixedDelayString = "1000")
+    @Scheduled(
+            initialDelayString = "${outbox.poller.initial-delay:0}",
+            fixedDelayString = "${outbox.poller.fixed-delay:1000}"
+    )
     public void publishPendingEvents() {
         List<OutboxEvent> pending = outboxEventRepository.findPendingEvents();
 

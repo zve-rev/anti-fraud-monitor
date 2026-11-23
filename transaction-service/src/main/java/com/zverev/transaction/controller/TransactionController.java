@@ -52,7 +52,7 @@ public class TransactionController {
     @PostMapping
     public ResponseEntity<TransactionCreatedResponse> createTransaction(@Valid @RequestBody TransactionRequest request) {
         TransactionCreatedResponse response = transactionService.process(request);
-        URI location = URI.create("api/v1/transactions" + response.transactionId());
+        URI location = URI.create("/api/v1/transactions/" + response.transactionId());
         return ResponseEntity.accepted().location(location).body(response);
     }
 }

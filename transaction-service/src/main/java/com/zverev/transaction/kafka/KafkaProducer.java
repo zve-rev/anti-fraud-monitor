@@ -24,6 +24,7 @@ public class KafkaProducer {
     private final OutboxEventRepository outboxEventRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
 
+
     @Transactional
     public void send(OutboxEvent event) {
         Long eventId = event.getId();
@@ -34,16 +35,38 @@ public class KafkaProducer {
             String payload = event.getPayload();
 
             kafkaTemplate.send(topic, messageKey, payload).get(10, TimeUnit.SECONDS);
-            outboxEventRepository.updateEvent(eventId, OutboxEventStatus.SENT, Instant.now());
+
+            outboxEventRepository.updateEvent(
+                    eventId,
+                    OutboxEventStatus.SENT,
+                    Instant.now()
+            );
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+
+            throw new RuntimeException("Interrupted while publishing outbox event " + eventId, e);
+
         } catch (Exception e) {
             int attempts = event.getAttempts();
             boolean giveUp = attempts + 1 >= maxAttempts;
 
-            OutboxEventStatus newEventStatus = giveUp ? OutboxEventStatus.FAILED : OutboxEventStatus.PENDING;
-            outboxEventRepository.updateEvent(eventId, newEventStatus, Instant.now());
+            OutboxEventStatus newEventStatus = giveUp
+                    ? OutboxEventStatus.FAILED
+                    : OutboxEventStatus.PENDING;
 
-            String message = e.getMessage();
-            log.warn("Failed to publish outbox event {} (attempt {}): {}", eventId, attempts + 1, message);
+            outboxEventRepository.updateEvent(
+                    eventId,
+                    newEventStatus,
+                    Instant.now()
+            );
+
+            log.warn(
+                    "Failed to publish outbox event {} (attempt {}): {}",
+                    eventId,
+                    attempts + 1,
+                    e.getMessage()
+            );
         }
     }
 }
