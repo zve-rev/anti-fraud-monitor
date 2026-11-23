@@ -1,7 +1,7 @@
 package com.zverev.riskassessment.util;
 
-import com.zverev.entity.Alert;
-import com.zverev.entity.Transaction;
+import com.zverev.shared.entity.Alert;
+import com.zverev.shared.entity.Transaction;
 import com.zverev.riskassessment.guard.Guard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;

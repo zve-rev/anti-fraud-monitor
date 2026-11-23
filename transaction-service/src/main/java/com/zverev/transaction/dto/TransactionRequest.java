@@ -1,7 +1,7 @@
 package com.zverev.transaction.dto;
 
-import com.zverev.entity.enums.MerchantCountry;
-import com.zverev.entity.enums.CurrencyCode;
+import com.zverev.shared.entity.enums.MerchantCountry;
+import com.zverev.shared.entity.enums.CurrencyCode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;

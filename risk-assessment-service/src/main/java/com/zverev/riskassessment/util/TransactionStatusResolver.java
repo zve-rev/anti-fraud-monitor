@@ -1,8 +1,8 @@
 package com.zverev.riskassessment.util;
 
-import com.zverev.entity.Alert;
-import com.zverev.entity.enums.AlertSeverity;
-import com.zverev.entity.enums.TransactionStatus;
+import com.zverev.shared.entity.Alert;
+import com.zverev.shared.entity.enums.AlertSeverity;
+import com.zverev.shared.entity.enums.TransactionStatus;
 import org.springframework.stereotype.Component;
 
 import java.util.List;

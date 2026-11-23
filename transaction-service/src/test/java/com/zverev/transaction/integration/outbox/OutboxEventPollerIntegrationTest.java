@@ -1,8 +1,8 @@
 package com.zverev.transaction.integration.outbox;
 
-import com.zverev.entity.OutboxEvent;
-import com.zverev.entity.enums.OutboxEventStatus;
-import com.zverev.repository.OutboxEventRepository;
+import com.zverev.shared.entity.OutboxEvent;
+import com.zverev.shared.entity.enums.OutboxEventStatus;
+import com.zverev.shared.repository.OutboxEventRepository;
 import com.zverev.transaction.TransactionServiceApplication;
 import com.zverev.transaction.outbox.OutboxEventPoller;
 import org.apache.kafka.clients.consumer.ConsumerConfig;

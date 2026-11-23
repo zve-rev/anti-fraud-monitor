@@ -1,18 +1,18 @@
 package com.zverev.transaction.service;
 
-import com.zverev.dto.TransactionEvent;
-import com.zverev.entity.OutboxEvent;
-import com.zverev.entity.Transaction;
-import com.zverev.entity.enums.TransactionStatus;
+import com.zverev.shared.dto.TransactionEvent;
+import com.zverev.shared.entity.OutboxEvent;
+import com.zverev.shared.entity.Transaction;
+import com.zverev.shared.entity.enums.TransactionStatus;
+import com.zverev.shared.exception.TransactionNotFoundException;
 import com.zverev.transaction.dto.AlertResponse;
 import com.zverev.transaction.dto.TransactionCreatedResponse;
 import com.zverev.transaction.dto.TransactionRequest;
 import com.zverev.transaction.dto.TransactionResponse;
 import com.zverev.transaction.exception.TransactionAlreadyExistsException;
-import com.zverev.repository.OutboxEventRepository;
-import com.zverev.repository.TransactionRepository;
-import com.zverev.transaction.exception.TransactionNotFoundException;
-import com.zverev.util.CardMasker;
+import com.zverev.shared.repository.OutboxEventRepository;
+import com.zverev.shared.repository.TransactionRepository;
+import com.zverev.shared.util.CardMasker;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;

@@ -1,9 +1,9 @@
 package com.zverev.transaction.integration.kafka;
 
-import com.zverev.entity.enums.CurrencyCode;
-import com.zverev.entity.enums.MerchantCountry;
-import com.zverev.entity.enums.OutboxEventStatus;
-import com.zverev.repository.OutboxEventRepository;
+import com.zverev.shared.entity.enums.CurrencyCode;
+import com.zverev.shared.entity.enums.MerchantCountry;
+import com.zverev.shared.entity.enums.OutboxEventStatus;
+import com.zverev.shared.repository.OutboxEventRepository;
 import com.zverev.transaction.TransactionServiceApplication;
 import com.zverev.transaction.outbox.OutboxEventPoller;
 import org.apache.kafka.clients.consumer.ConsumerConfig;

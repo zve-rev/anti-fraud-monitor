@@ -1,5 +1,6 @@
 package com.zverev.transaction.exception;
 
+import com.zverev.shared.exception.TransactionNotFoundException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;

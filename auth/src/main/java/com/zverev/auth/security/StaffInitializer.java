@@ -1,8 +1,8 @@
 package com.zverev.auth.security;
 
-import com.zverev.entity.Staff;
-import com.zverev.entity.enums.StaffRole;
-import com.zverev.repository.StaffRepository;
+import com.zverev.shared.entity.Staff;
+import com.zverev.shared.entity.enums.StaffRole;
+import com.zverev.shared.repository.StaffRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;

@@ -1,12 +1,12 @@
 package com.zverev.transaction.integration.repository;
 
-import com.zverev.entity.OutboxEvent;
-import com.zverev.entity.Transaction;
-import com.zverev.entity.enums.CurrencyCode;
-import com.zverev.entity.enums.MerchantCountry;
-import com.zverev.entity.enums.OutboxEventStatus;
-import com.zverev.repository.OutboxEventRepository;
-import com.zverev.repository.TransactionRepository;
+import com.zverev.shared.entity.OutboxEvent;
+import com.zverev.shared.entity.Transaction;
+import com.zverev.shared.entity.enums.CurrencyCode;
+import com.zverev.shared.entity.enums.MerchantCountry;
+import com.zverev.shared.entity.enums.OutboxEventStatus;
+import com.zverev.shared.repository.OutboxEventRepository;
+import com.zverev.shared.repository.TransactionRepository;
 import com.zverev.transaction.config.JpaConfiguration;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;

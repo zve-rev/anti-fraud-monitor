@@ -1,11 +1,11 @@
 package com.zverev.riskassessment.kafka;
 
-import com.zverev.dto.TransactionEvent;
-import com.zverev.entity.Alert;
-import com.zverev.entity.Transaction;
-import com.zverev.entity.enums.TransactionStatus;
-import com.zverev.repository.TransactionRepository;
-import com.zverev.riskassessment.exception.TransactionNotFoundException;
+import com.zverev.shared.dto.TransactionEvent;
+import com.zverev.shared.entity.Alert;
+import com.zverev.shared.entity.Transaction;
+import com.zverev.shared.entity.enums.TransactionStatus;
+import com.zverev.shared.repository.TransactionRepository;
+import com.zverev.shared.exception.TransactionNotFoundException;
 import com.zverev.riskassessment.util.AlertFilter;
 import com.zverev.riskassessment.util.TransactionStatusResolver;
 import io.micrometer.core.instrument.MeterRegistry;

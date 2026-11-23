@@ -1,7 +1,7 @@
 package com.zverev.auth.security;
 
-import com.zverev.entity.Staff;
-import com.zverev.repository.StaffRepository;
+import com.zverev.shared.entity.Staff;
+import com.zverev.shared.repository.StaffRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;

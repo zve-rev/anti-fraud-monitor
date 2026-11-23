@@ -1,9 +1,9 @@
 package com.zverev.transaction.dto;
 
-import com.zverev.entity.Transaction;
-import com.zverev.entity.enums.MerchantCountry;
-import com.zverev.entity.enums.CurrencyCode;
-import com.zverev.entity.enums.TransactionStatus;
+import com.zverev.shared.entity.Transaction;
+import com.zverev.shared.entity.enums.MerchantCountry;
+import com.zverev.shared.entity.enums.CurrencyCode;
+import com.zverev.shared.entity.enums.TransactionStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;

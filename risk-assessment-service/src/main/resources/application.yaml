@@ -35,8 +35,8 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
       properties:
-        spring.json.trusted.packages: com.zverev.dto
-        spring.json.value.default.type: com.zverev.dto.TransactionEvent
+        spring.json.trusted.packages: com.zverev.shared.dto
+        spring.json.value.default.type: com.zverev.shared.dto.TransactionEvent
         spring.json.use.type.headers: false
 
 management:

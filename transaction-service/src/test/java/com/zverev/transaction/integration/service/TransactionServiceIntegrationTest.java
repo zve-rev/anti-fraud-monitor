@@ -1,9 +1,9 @@
 package com.zverev.transaction.integration.service;
 
-import com.zverev.entity.OutboxEvent;
-import com.zverev.entity.enums.CurrencyCode;
-import com.zverev.entity.enums.MerchantCountry;
-import com.zverev.repository.OutboxEventRepository;
+import com.zverev.shared.entity.OutboxEvent;
+import com.zverev.shared.entity.enums.CurrencyCode;
+import com.zverev.shared.entity.enums.MerchantCountry;
+import com.zverev.shared.repository.OutboxEventRepository;
 import com.zverev.transaction.TransactionServiceApplication;
 import com.zverev.transaction.dto.TransactionRequest;
 import com.zverev.transaction.outbox.OutboxEventPoller;

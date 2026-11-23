@@ -1,9 +1,9 @@
 package com.zverev.transaction.service;
 
+import com.zverev.shared.exception.TransactionNotFoundException;
 import com.zverev.transaction.dto.AlertResponse;
-import com.zverev.repository.AlertRepository;
-import com.zverev.repository.TransactionRepository;
-import com.zverev.transaction.exception.TransactionNotFoundException;
+import com.zverev.shared.repository.AlertRepository;
+import com.zverev.shared.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

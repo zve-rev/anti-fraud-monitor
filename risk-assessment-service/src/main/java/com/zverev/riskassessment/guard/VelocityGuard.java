@@ -1,10 +1,10 @@
 package com.zverev.riskassessment.guard;
 
-import com.zverev.entity.Transaction;
-import com.zverev.entity.enums.AlertSeverity;
-import com.zverev.entity.enums.Rule;
+import com.zverev.shared.entity.Transaction;
+import com.zverev.shared.entity.enums.AlertSeverity;
+import com.zverev.shared.entity.enums.Rule;
 import com.zverev.riskassessment.dto.GuardViolation;
-import com.zverev.util.CardMasker;
+import com.zverev.shared.util.CardMasker;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;

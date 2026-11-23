@@ -1,12 +1,12 @@
 package com.zverev.transaction.unit.service;
 
-import com.zverev.entity.Alert;
-import com.zverev.entity.enums.AlertSeverity;
-import com.zverev.entity.enums.Rule;
-import com.zverev.repository.AlertRepository;
-import com.zverev.repository.TransactionRepository;
+import com.zverev.shared.entity.Alert;
+import com.zverev.shared.entity.enums.AlertSeverity;
+import com.zverev.shared.entity.enums.Rule;
+import com.zverev.shared.exception.TransactionNotFoundException;
+import com.zverev.shared.repository.AlertRepository;
+import com.zverev.shared.repository.TransactionRepository;
 import com.zverev.transaction.dto.AlertResponse;
-import com.zverev.transaction.exception.TransactionNotFoundException;
 import com.zverev.transaction.service.AlertService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

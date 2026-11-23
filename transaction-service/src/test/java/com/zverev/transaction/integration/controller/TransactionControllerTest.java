@@ -1,10 +1,11 @@
 package com.zverev.transaction.integration.controller;
 
-import com.zverev.entity.enums.AlertSeverity;
-import com.zverev.entity.enums.CurrencyCode;
-import com.zverev.entity.enums.MerchantCountry;
-import com.zverev.entity.enums.Rule;
-import com.zverev.entity.enums.TransactionStatus;
+import com.zverev.shared.entity.enums.AlertSeverity;
+import com.zverev.shared.entity.enums.CurrencyCode;
+import com.zverev.shared.entity.enums.MerchantCountry;
+import com.zverev.shared.entity.enums.Rule;
+import com.zverev.shared.entity.enums.TransactionStatus;
+import com.zverev.shared.exception.TransactionNotFoundException;
 import com.zverev.transaction.controller.TransactionController;
 import com.zverev.transaction.dto.AlertResponse;
 import com.zverev.transaction.dto.TransactionCreatedResponse;
@@ -12,7 +13,6 @@ import com.zverev.transaction.dto.TransactionRequest;
 import com.zverev.transaction.dto.TransactionResponse;
 import com.zverev.transaction.exception.GlobalExceptionHandler;
 import com.zverev.transaction.exception.TransactionAlreadyExistsException;
-import com.zverev.transaction.exception.TransactionNotFoundException;
 import com.zverev.transaction.service.TransactionService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

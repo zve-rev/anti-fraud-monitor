@@ -1,8 +1,8 @@
 package com.zverev.transaction.dto;
 
-import com.zverev.entity.Alert;
-import com.zverev.entity.enums.AlertSeverity;
-import com.zverev.entity.enums.Rule;
+import com.zverev.shared.entity.Alert;
+import com.zverev.shared.entity.enums.AlertSeverity;
+import com.zverev.shared.entity.enums.Rule;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;

@@ -1,8 +1,8 @@
 package com.zverev.transaction.outbox;
 
-import com.zverev.entity.OutboxEvent;
+import com.zverev.shared.entity.OutboxEvent;
 import com.zverev.transaction.kafka.KafkaProducer;
-import com.zverev.repository.OutboxEventRepository;
+import com.zverev.shared.repository.OutboxEventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;

@@ -1,8 +1,8 @@
 package com.zverev.transaction.kafka;
 
-import com.zverev.entity.OutboxEvent;
-import com.zverev.entity.enums.OutboxEventStatus;
-import com.zverev.repository.OutboxEventRepository;
+import com.zverev.shared.entity.OutboxEvent;
+import com.zverev.shared.entity.enums.OutboxEventStatus;
+import com.zverev.shared.repository.OutboxEventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;

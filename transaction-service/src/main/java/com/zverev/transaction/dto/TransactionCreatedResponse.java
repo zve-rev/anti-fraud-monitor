@@ -1,6 +1,6 @@
 package com.zverev.transaction.dto;
 
-import com.zverev.entity.enums.TransactionStatus;
+import com.zverev.shared.entity.enums.TransactionStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 @Schema(

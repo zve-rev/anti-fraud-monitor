@@ -6,9 +6,10 @@ import org.springframework.boot.persistence.autoconfigure.EntityScan;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 @SpringBootApplication
-@EntityScan("com.zverev.entity")
-@EnableJpaRepositories("com.zverev.repository")
+@EntityScan("com.zverev.shared.entity")
+@EnableJpaRepositories("com.zverev.shared.repository")
 public class RiskAssessmentApplication {
+
     public static void main(String[] args) {
         SpringApplication.run(RiskAssessmentApplication.class, args);
     }
