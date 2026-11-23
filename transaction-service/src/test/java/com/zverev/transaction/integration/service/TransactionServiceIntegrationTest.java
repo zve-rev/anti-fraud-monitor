@@ -7,6 +7,7 @@ import com.zverev.repository.OutboxEventRepository;
 import com.zverev.transaction.TransactionServiceApplication;
 import com.zverev.transaction.dto.TransactionRequest;
 import com.zverev.transaction.outbox.OutboxEventPoller;
+import com.zverev.transaction.service.TransactionService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

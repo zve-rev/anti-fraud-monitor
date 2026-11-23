@@ -5,6 +5,7 @@ import com.zverev.entity.enums.CurrencyCode;
 import com.zverev.entity.enums.MerchantCountry;
 import com.zverev.entity.enums.Rule;
 import com.zverev.entity.enums.TransactionStatus;
+import com.zverev.transaction.controller.TransactionController;
 import com.zverev.transaction.dto.AlertResponse;
 import com.zverev.transaction.dto.TransactionCreatedResponse;
 import com.zverev.transaction.dto.TransactionRequest;
