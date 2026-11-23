@@ -1,3 +1,4 @@
+
 services:
   postgres:
     image: postgres:16
@@ -11,7 +12,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-antifraud}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-antifraud} -d ${POSTGRES_DB:-antifraud}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -66,19 +67,21 @@ services:
     ports:
       - "${KAFKA_UI_PORT:-8090}:8080"
     environment:
-      - KAFKA_CLUSTERS_0_NAME=local-kafka
-      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:29092
+      KAFKA_CLUSTERS_0_NAME: local-kafka
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
 
-  ingestion:
+  transaction-service:
     build:
       context: .
-      dockerfile: ingestion/Dockerfile
-    container_name: antifraud-ingestion
+      dockerfile: transaction-service/Dockerfile
+    container_name: antifraud-transaction-service
     depends_on:
       postgres:
         condition: service_healthy
       kafka:
         condition: service_healthy
+    ports:
+      - "${TRANSACTION_SERVICE_PORT:-8081}:8081"
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-antifraud}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-antifraud}
@@ -92,11 +95,11 @@ services:
       retries: 10
       start_period: 60s
 
-  scoring:
+  risk-assessment-service:
     build:
       context: .
-      dockerfile: scoring/Dockerfile
-    container_name: antifraud-scoring
+      dockerfile: risk-assessment-service/Dockerfile
+    container_name: antifraud-risk-assessment-service
     depends_on:
       postgres:
         condition: service_healthy
@@ -104,6 +107,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+    ports:
+      - "${RISK_ASSESSMENT_PORT:-8084}:8084"
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-antifraud}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-antifraud}
@@ -119,26 +124,6 @@ services:
       retries: 10
       start_period: 60s
 
-  alerting:
-    build:
-      context: .
-      dockerfile: alerting/Dockerfile
-    container_name: antifraud-alerting
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-antifraud}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-antifraud}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-antifraud}
-      MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8082/actuator/health/readiness"]
-      interval: 10s
-      timeout: 3s
-      retries: 10
-      start_period: 60s
-
   auth:
     build:
       context: .
@@ -147,6 +132,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    ports:
+      - "${AUTH_PORT:-8083}:8083"
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-antifraud}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-antifraud}
@@ -167,17 +154,14 @@ services:
       dockerfile: gateway/Dockerfile
     container_name: antifraud-gateway
     depends_on:
-      ingestion:
-        condition: service_healthy
-      alerting:
+      transaction-service:
         condition: service_healthy
       auth:
         condition: service_healthy
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
     environment:
-      INGESTION_URI: http://ingestion:8081
-      ALERTING_URI: http://alerting:8082
+      TRANSACTION_SERVICE_URI: http://transaction-service:8081
       AUTH_URI: http://auth:8083
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
@@ -194,15 +178,15 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
-      - "9090:9090"
+      - "${PROMETHEUS_PORT:-9090}:9090"
 
   grafana:
     image: grafana/grafana:12.0.2
     container_name: antifraud-grafana
     ports:
-      - "3000:3000"
+      - "${GRAFANA_PORT:-3000}:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning

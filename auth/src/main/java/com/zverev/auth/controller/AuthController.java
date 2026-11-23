@@ -1,7 +1,7 @@
 package com.zverev.auth.controller;
 
 import com.zverev.auth.dto.LoginRequest;
-import com.zverev.auth.dto.LoginResponse;
+import com.zverev.auth.dto.TokenResponse;
 import com.zverev.auth.security.JwtService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +25,7 @@ public class AuthController {
     private final JwtService jwtService;
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
+    public ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getLogin(), request.getPassword())
         );
@@ -33,6 +33,6 @@ public class AuthController {
         UserDetails user = userDetailsService.loadUserByUsername(request.getLogin());
         String token = jwtService.generateToken(user);
 
-        return ResponseEntity.ok(new LoginResponse(token));
+        return ResponseEntity.ok(new TokenResponse(token));
     }
 }

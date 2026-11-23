@@ -2,19 +2,17 @@ FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /app
 
 COPY pom.xml .
-COPY common/pom.xml common/
+COPY shared/pom.xml shared/
 COPY auth/pom.xml auth/
-COPY ingestion/pom.xml ingestion/
-COPY scoring/pom.xml scoring/
-COPY alerting/pom.xml alerting/
+COPY transaction-service/pom.xml transaction-service/
+COPY risk-assessment-service/pom.xml risk-assessment-service/
 COPY gateway/pom.xml gateway/
 
-RUN mvn -B -q dependency:go-offline -pl gateway -am
+RUN mvn -B -pl gateway dependency:go-offline
 
-COPY common common/
-COPY gateway gateway/
+COPY gateway/src gateway/src
 
-RUN mvn -B -q clean package -pl gateway -am -DskipTests
+RUN mvn -B -pl gateway clean package -DskipTests
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app

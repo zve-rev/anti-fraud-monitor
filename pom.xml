@@ -19,11 +19,10 @@
     <description>Anti-fraud monitoring system using Spring Boot</description>
 
     <modules>
-        <module>common</module>
+        <module>shared</module>
         <module>auth</module>
-        <module>ingestion</module>
-        <module>scoring</module>
-        <module>alerting</module>
+        <module>transaction-service</module>
+        <module>risk-assessment-service</module>
         <module>gateway</module>
     </modules>
 
