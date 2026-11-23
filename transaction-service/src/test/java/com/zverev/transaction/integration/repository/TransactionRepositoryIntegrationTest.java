@@ -1,4 +1,4 @@
-package com.zverev.transaction.repository;
+package com.zverev.transaction.integration.repository;
 
 import com.zverev.entity.OutboxEvent;
 import com.zverev.entity.Transaction;

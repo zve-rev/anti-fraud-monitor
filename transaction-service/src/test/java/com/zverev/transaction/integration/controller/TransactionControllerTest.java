@@ -1,4 +1,4 @@
-package com.zverev.transaction.controller;
+package com.zverev.transaction.integration.controller;
 
 import com.zverev.entity.enums.AlertSeverity;
 import com.zverev.entity.enums.CurrencyCode;
@@ -11,18 +11,19 @@ import com.zverev.transaction.dto.TransactionRequest;
 import com.zverev.transaction.dto.TransactionResponse;
 import com.zverev.transaction.exception.GlobalExceptionHandler;
 import com.zverev.transaction.exception.TransactionAlreadyExistsException;
+import com.zverev.transaction.exception.TransactionNotFoundException;
 import com.zverev.transaction.service.TransactionService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -166,6 +167,34 @@ class TransactionControllerTest {
                 .andExpect(jsonPath("$.cardTokenMasked").value("****1234"))
                 .andExpect(jsonPath("$.merchantName").value("Test Merchant"))
                 .andExpect(jsonPath("$.alerts").isArray());
+
+        verify(transactionService).findTransactionById(1L);
+    }
+
+    @Test
+    @DisplayName("Should return 404 when transaction does not exist")
+    void shouldReturnNotFoundWhenTransactionDoesNotExist() throws Exception {
+        when(transactionService.findTransactionById(999L))
+                .thenThrow(new TransactionNotFoundException("Transaction 999 not found"));
+
+        mockMvc.perform(get(BASE_URL + "/999"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Transaction not found"))
+                .andExpect(jsonPath("$.detail").value("Transaction 999 not found"));
+
+        verify(transactionService).findTransactionById(999L);
+    }
+
+    @Test
+    @DisplayName("Should return 500 when unexpected exception occurs")
+    void shouldReturnInternalServerErrorWhenUnexpectedExceptionOccurs() throws Exception {
+        when(transactionService.findTransactionById(1L))
+                .thenThrow(new RuntimeException("Database connection failed"));
+
+        mockMvc.perform(get(BASE_URL + "/1"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.title").value("Internal server error"))
+                .andExpect(jsonPath("$.detail").value("An unexpected error occurred"));
 
         verify(transactionService).findTransactionById(1L);
     }

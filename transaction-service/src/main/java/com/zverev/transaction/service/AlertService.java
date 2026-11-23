@@ -3,8 +3,8 @@ package com.zverev.transaction.service;
 import com.zverev.transaction.dto.AlertResponse;
 import com.zverev.repository.AlertRepository;
 import com.zverev.repository.TransactionRepository;
+import com.zverev.transaction.exception.TransactionNotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.apache.kafka.common.errors.ResourceNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -20,7 +20,7 @@ public class AlertService {
     @Transactional(readOnly = true)
     public Page<AlertResponse> findTransactionAlerts(Long transactionId, Pageable pageable) {
         if (!transactionRepository.existsById(transactionId)) {
-            throw new ResourceNotFoundException("Transaction " + transactionId + " not found");
+            throw new TransactionNotFoundException("Transaction " + transactionId + " not found");
         }
         return alertRepository.findByTransactionId(transactionId, pageable)
                 .map(AlertResponse::toAlertResponse);

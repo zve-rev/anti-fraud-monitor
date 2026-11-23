@@ -1,4 +1,4 @@
-package com.zverev.transaction.service;
+package com.zverev.transaction.integration.service;
 
 import com.zverev.entity.OutboxEvent;
 import com.zverev.entity.enums.CurrencyCode;

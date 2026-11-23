@@ -1,9 +1,10 @@
-package com.zverev.transaction.kafka;
+package com.zverev.transaction.integration.kafka;
 
 import com.zverev.entity.OutboxEvent;
 import com.zverev.entity.enums.OutboxEventStatus;
 import com.zverev.repository.OutboxEventRepository;
 import com.zverev.transaction.TransactionServiceApplication;
+import com.zverev.transaction.kafka.KafkaProducer;
 import com.zverev.transaction.outbox.OutboxEventPoller;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;

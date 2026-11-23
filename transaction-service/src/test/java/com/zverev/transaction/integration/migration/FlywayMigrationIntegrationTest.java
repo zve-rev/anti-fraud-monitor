@@ -1,4 +1,4 @@
-package com.zverev.transaction.integration;
+package com.zverev.transaction.integration.migration;
 
 import com.zverev.transaction.TransactionServiceApplication;
 import org.flywaydb.core.Flyway;

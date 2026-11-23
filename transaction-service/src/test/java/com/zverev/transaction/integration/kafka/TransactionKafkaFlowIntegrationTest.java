@@ -1,4 +1,4 @@
-package com.zverev.transaction.integration;
+package com.zverev.transaction.integration.kafka;
 
 import com.zverev.entity.enums.CurrencyCode;
 import com.zverev.entity.enums.MerchantCountry;

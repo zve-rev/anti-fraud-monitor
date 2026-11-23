@@ -1,4 +1,4 @@
-package com.zverev.transaction.integration;
+package com.zverev.transaction.integration.outbox;
 
 import com.zverev.entity.OutboxEvent;
 import com.zverev.entity.enums.OutboxEventStatus;

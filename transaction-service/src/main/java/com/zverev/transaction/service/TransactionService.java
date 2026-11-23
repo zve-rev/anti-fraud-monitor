@@ -11,9 +11,9 @@ import com.zverev.transaction.dto.TransactionResponse;
 import com.zverev.transaction.exception.TransactionAlreadyExistsException;
 import com.zverev.repository.OutboxEventRepository;
 import com.zverev.repository.TransactionRepository;
+import com.zverev.transaction.exception.TransactionNotFoundException;
 import com.zverev.util.CardMasker;
 import lombok.RequiredArgsConstructor;
-import org.apache.kafka.common.errors.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -49,7 +49,7 @@ public class TransactionService {
     @Transactional(readOnly = true)
     public TransactionResponse findTransactionById(Long id) {
         Transaction transaction = transactionRepository.findByIdWithAlerts(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Transaction " + id + " not found"));
+                .orElseThrow(() -> new TransactionNotFoundException("Transaction " + id + " not found"));
         String cardTokenMasked = CardMasker.mask(transaction.getCardToken());
         return toTransactionResponse(transaction, cardTokenMasked);
     }
