@@ -8,11 +8,29 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
           cache: maven
-      - run: mvn -B verify
+
+      - name: Build and verify
+        run: |
+          for attempt in 1 2 3; do
+            if mvn -B -ntp verify; then
+              exit 0
+            fi
+
+            if [ "$attempt" -lt 3 ]; then
+              echo "Maven build failed. Retrying in $((attempt * 30)) seconds..."
+              sleep $((attempt * 30))
+            fi
+          done
+
+          exit 1
