@@ -1,5 +1,4 @@
-
-package com.zverev.gateway.integration.e2e;
+package com.zverev.gateway.e2e;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
