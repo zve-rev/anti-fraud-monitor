@@ -3,7 +3,7 @@ WORKDIR /app
 
 COPY pom.xml .
 COPY shared/pom.xml shared/
-COPY auth/pom.xml auth/
+COPY auth-service/pom.xml auth-service/
 COPY transaction-service/pom.xml transaction-service/
 COPY risk-assessment-service/pom.xml risk-assessment-service/
 COPY gateway/pom.xml gateway/

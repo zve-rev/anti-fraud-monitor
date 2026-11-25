@@ -20,7 +20,7 @@
 
     <modules>
         <module>shared</module>
-        <module>auth</module>
+        <module>auth-service</module>
         <module>transaction-service</module>
         <module>risk-assessment-service</module>
         <module>gateway</module>

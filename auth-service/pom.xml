@@ -10,7 +10,7 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <artifactId>auth</artifactId>
+    <artifactId>auth-service</artifactId>
     <name>auth</name>
 
     <dependencies>
