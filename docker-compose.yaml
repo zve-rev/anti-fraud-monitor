@@ -197,7 +197,7 @@ services:
     profiles: ["loadtest"]
     volumes:
       - ./k6:/scripts
-    command: run /scripts/load-test.js --summary-export=/scripts/summary.json
+    command: run /scripts/load-test.js --summary-export=/scripts/breakpoint-test-summary.json
     depends_on:
       gateway:
         condition: service_healthy

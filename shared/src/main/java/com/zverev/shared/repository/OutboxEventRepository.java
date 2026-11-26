@@ -16,10 +16,10 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> 
         SELECT * FROM outbox_events
         WHERE status = 'PENDING'
         ORDER BY created_at ASC
-        LIMIT 10
+        LIMIT :batchSize
         FOR UPDATE SKIP LOCKED
     """, nativeQuery = true)
-    List<OutboxEvent> findPendingEvents();
+    List<OutboxEvent> findPendingEvents(@Param("batchSize") int batchSize);
 
     @Modifying
     @Query("""

@@ -37,17 +37,26 @@ import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 
 @Testcontainers
 @SpringBootTest(
         classes = TransactionServiceApplication.class,
-        properties = "outbox.poller.fixed-delay=3600000"
+        properties = {
+                "outbox.poller.fixed-delay=3600000",
+                "outbox.poller.batch-size=50"
+        }
 )
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 class OutboxEventPollerIntegrationTest {
+
+    private static final int BATCH_SIZE = 50;
 
     @Container
     static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
@@ -115,10 +124,10 @@ class OutboxEventPollerIntegrationTest {
     }
 
     @Test
-    void shouldPublishOnlyTenPendingEventsPerBatch() {
+    void shouldPublishFiftyPendingEventsPerBatch() {
         String topic = "transactions.raw." + UUID.randomUUID();
 
-        for (int i = 0; i < 12; i++) {
+        for (int i = 0; i < BATCH_SIZE + 2; i++) {
             String aggregateId = UUID.randomUUID().toString();
 
             createOutboxEvent(aggregateId, "{}", topic);
@@ -136,14 +145,14 @@ class OutboxEventPollerIntegrationTest {
                 .filter(event -> event.getStatus() == OutboxEventStatus.PENDING)
                 .count();
 
-        assertEquals(12, events.size());
-        assertEquals(10, sentCount);
+        assertEquals(BATCH_SIZE + 2, events.size());
+        assertEquals(BATCH_SIZE, sentCount);
         assertEquals(2, pendingCount);
     }
 
     @Test
     void shouldSkipRowsLockedByAnotherTransaction() throws Exception {
-        for (int i = 0; i < 20; i++) {
+        for (int i = 0; i < BATCH_SIZE * 2; i++) {
             String aggregateId = UUID.randomUUID().toString();
 
             createOutboxEvent(aggregateId, "{}", "transactions.raw");
@@ -154,12 +163,11 @@ class OutboxEventPollerIntegrationTest {
 
         ExecutorService executor = Executors.newSingleThreadExecutor();
 
-        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
-
         try {
             Future<List<Long>> firstTransaction = executor.submit(() ->
-                    transactionTemplate.execute(status -> {
-                        List<OutboxEvent> events = outboxEventRepository.findPendingEvents();
+                    new TransactionTemplate(transactionManager).execute(status -> {
+                        List<OutboxEvent> events =
+                                outboxEventRepository.findPendingEvents(BATCH_SIZE);
 
                         List<Long> lockedIds = events.stream()
                                 .map(OutboxEvent::getId)
@@ -187,8 +195,8 @@ class OutboxEventPollerIntegrationTest {
                     "First transaction did not acquire row locks"
             );
 
-            List<Long> secondTransaction = transactionTemplate.execute(status ->
-                    outboxEventRepository.findPendingEvents().stream()
+            List<Long> secondTransaction = new TransactionTemplate(transactionManager).execute(status ->
+                    outboxEventRepository.findPendingEvents(BATCH_SIZE).stream()
                             .map(OutboxEvent::getId)
                             .toList()
             );
@@ -197,8 +205,8 @@ class OutboxEventPollerIntegrationTest {
 
             List<Long> firstTransactionIds = firstTransaction.get(10, TimeUnit.SECONDS);
 
-            assertEquals(10, firstTransactionIds.size());
-            assertEquals(10, secondTransaction.size());
+            assertEquals(BATCH_SIZE, firstTransactionIds.size());
+            assertEquals(BATCH_SIZE, secondTransaction.size());
 
             Set<Long> firstIds = new HashSet<>(firstTransactionIds);
             Set<Long> secondIds = new HashSet<>(secondTransaction);
@@ -211,7 +219,7 @@ class OutboxEventPollerIntegrationTest {
             Set<Long> allIds = new HashSet<>(firstIds);
             allIds.addAll(secondIds);
 
-            assertEquals(20, allIds.size());
+            assertEquals(BATCH_SIZE * 2, allIds.size());
 
         } finally {
             releaseFirstTransaction.countDown();
@@ -445,9 +453,6 @@ class OutboxEventPollerIntegrationTest {
                 updatedEvent.getAttempts()
         );
 
-        assertEquals(
-                null,
-                updatedEvent.getProcessedAt()
-        );
+        assertNull(updatedEvent.getProcessedAt());
     }
 }

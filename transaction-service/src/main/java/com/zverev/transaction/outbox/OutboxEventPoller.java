@@ -5,6 +5,7 @@ import com.zverev.transaction.kafka.KafkaProducer;
 import com.zverev.shared.repository.OutboxEventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +17,9 @@ import java.util.List;
 @Slf4j
 public class OutboxEventPoller {
 
+    @Value("${outbox.poller.batch-size:50}")
+    private int batchSize;
+
     private final OutboxEventRepository outboxEventRepository;
     private final KafkaProducer kafkaProducer;
 
@@ -25,7 +29,7 @@ public class OutboxEventPoller {
             fixedDelayString = "${outbox.poller.fixed-delay:1000}"
     )
     public void publishPendingEvents() {
-        List<OutboxEvent> pending = outboxEventRepository.findPendingEvents();
+        List<OutboxEvent> pending = outboxEventRepository.findPendingEvents(batchSize);
 
         if (pending.isEmpty()) {
             return;
