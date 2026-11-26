@@ -26,7 +26,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
-                "security.jwt.secret=integration-test-secret-key-with-at-least-32-bytes"
+                "spring.main.web-application-type=reactive",
+                "security.jwt.secret=integration-test-secret-key-with-at-least-32-bytes",
+                "spring.autoconfigure.exclude=" +
+                        "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration," +
+                        "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration," +
+                        "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration," +
+                        "org.springframework.boot.jdbc.autoconfigure.DataSourceTransactionManagerAutoConfiguration," +
+                        "org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration"
         }
 )
 @AutoConfigureWebTestClient
