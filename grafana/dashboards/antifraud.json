@@ -2,7 +2,7 @@
   "title": "Anti-fraud monitor",
   "uid": "antifraud",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "refresh": "10s",
   "time": {
     "from": "now-30m",
@@ -32,7 +32,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (rule) (increase(antifraud_alerts_created_total[1m]))",
+          "expr": "sum by (rule) (increase(antifraud_alerts_total[1m]))",
           "legendFormat": "{{rule}}"
         }
       ]

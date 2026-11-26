@@ -12,8 +12,12 @@ import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.BackOff;
+import org.springframework.kafka.annotation.DltHandler;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.annotation.RetryableTopic;
+import org.springframework.kafka.retrytopic.DltStrategy;
+import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,7 +34,10 @@ public class KafkaConsumer {
     private final TransactionStatusResolver transactionStatusResolver;
     private final MeterRegistry meterRegistry;
 
-    @RetryableTopic(backOff = @BackOff(delay = 2000, multiplier = 2.0))
+    @RetryableTopic(
+            backOff = @BackOff(delay = 2000, multiplier = 2.0),
+            dltStrategy = DltStrategy.FAIL_ON_ERROR
+    )
     @KafkaListener(topics = "transactions.raw", groupId = "antifraud-group")
     @Transactional
     public void consume(TransactionEvent transactionEvent) {
@@ -56,5 +63,21 @@ public class KafkaConsumer {
         alerts.forEach(alert -> meterRegistry.counter("antifraud.alerts.created", "rule", alert.getRule().name()).increment());
 
         log.info("Transaction processed: externalId={}, status={}", externalId, status);
+    }
+
+    @DltHandler
+    public void handleDlt(
+            TransactionEvent transactionEvent,
+            @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
+            @Header(KafkaHeaders.EXCEPTION_MESSAGE) String exceptionMessage
+    ) {
+        meterRegistry.counter("antifraud.events.dead").increment();
+
+        log.error(
+                "Transaction event moved to DLT: externalId={}, topic={}, reason={}",
+                transactionEvent.externalId(),
+                topic,
+                exceptionMessage
+        );
     }
 }

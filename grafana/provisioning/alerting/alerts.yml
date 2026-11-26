@@ -1,0 +1,38 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: antifraud-alerts
+    folder: Anti-Fraud
+    interval: 1m
+    rules:
+      - uid: dlt-events-detected
+        title: DLT Events Detected
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: sum(increase(antifraud_events_dead_total[5m])) > 0
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              range: false
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: Dead Letter Topic received an event
+          description: One or more events were sent to the Kafka Dead Letter Topic during the last 5 minutes.
+        labels:
+          severity: critical
+          service: risk-assessment-service
+        isPaused: false
